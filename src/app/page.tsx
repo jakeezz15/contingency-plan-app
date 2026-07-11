@@ -6,6 +6,10 @@ import PersonCard from "@/app/components/PersonCard";
 import { geocodeAddress } from "@/app/lib/geocode";
 import { findNearestMeetingPoint, formatDistanceKm } from "@/app/lib/geo";
 import { exportElementToPdf } from "@/app/lib/pdf";
+import {
+  formatRoleOption,
+  ROLE_DEFINITIONS,
+} from "@/app/lib/roles";
 import type {
   GeocodeResult,
   MeetingPoint,
@@ -21,14 +25,6 @@ const MapPicker = dynamic(() => import("@/app/components/MapPicker"), {
 const LEGACY_STORAGE_KEY = "contingency-plan-people";
 const PLANS_STORAGE_KEY = "contingency-plan-plans";
 const ACTIVE_PLAN_STORAGE_KEY = "contingency-plan-active-id";
-
-const ROLE_OPTIONS = [
-  "Team Lead",
-  "Backup Contact",
-  "Family",
-  "Staff",
-  "Other",
-];
 
 function formatDate(isoDate: string) {
   return new Date(isoDate).toLocaleDateString(undefined, {
@@ -546,11 +542,14 @@ export default function Home() {
 
     setShowGeneratedPlan(true);
 
-    setTimeout(() => {
-      document.getElementById("generated-plan")?.scrollIntoView({
-        behavior: "smooth",
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        document.getElementById("generated-plan")?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
       });
-    }, 100);
+    });
   }
 
   function printPlan() {
@@ -629,6 +628,15 @@ export default function Home() {
   }
 
   const displayPlanName = planName.trim() || "Untitled Contingency Plan";
+  const canGeneratePlan = planName.trim().length > 0 && people.length > 0;
+  const generatePlanHint =
+    !planName.trim() && people.length === 0
+      ? "Add a plan name and at least one person to generate."
+      : !planName.trim()
+        ? "Add a plan name in Plan Details above."
+        : people.length === 0
+          ? "Add at least one person with a confirmed address."
+          : "";
 
   return (
     <main className="min-h-screen bg-gray-100 p-6 print:bg-white">
@@ -789,9 +797,9 @@ export default function Home() {
                   onChange={(e) => setRole(e.target.value)}
                 >
                   <option value="">Select a role (optional)</option>
-                  {ROLE_OPTIONS.map((option) => (
-                    <option key={option} value={option}>
-                      {option}
+                  {ROLE_DEFINITIONS.map((definition) => (
+                    <option key={definition.label} value={definition.label}>
+                      {formatRoleOption(definition)}
                     </option>
                   ))}
                 </select>
@@ -979,6 +987,7 @@ export default function Home() {
             </div>
 
             <MapPicker
+              mapKey="editor-map"
               people={people}
               meetingPoints={meetingPoints}
               selectedLocation={selectedLocation}
@@ -998,14 +1007,21 @@ export default function Home() {
               </p>
             </div>
 
-            <div className="flex flex-col gap-2 sm:flex-row">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
               <button
                 onClick={generatePlan}
-                className="rounded-lg bg-green-600 px-5 py-3 font-semibold text-white hover:bg-green-700"
+                disabled={!canGeneratePlan}
+                className="rounded-lg bg-green-600 px-5 py-3 font-semibold text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Generate Contingency Plan Map
               </button>
 
+              {!canGeneratePlan && generatePlanHint && (
+                <p className="text-sm text-amber-700">{generatePlanHint}</p>
+              )}
+            </div>
+
+            <div className="flex flex-col gap-2 sm:flex-row">
               <button
                 onClick={clearAllPeople}
                 className="rounded-lg bg-red-600 px-5 py-3 font-semibold text-white hover:bg-red-700"
@@ -1155,6 +1171,7 @@ export default function Home() {
             </div>
 
             <MapPicker
+              mapKey="generated-plan-map"
               people={people}
               meetingPoints={meetingPoints}
               selectedLocation={null}

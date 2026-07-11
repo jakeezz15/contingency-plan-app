@@ -1,0 +1,32 @@
+@media print {
+  @page {
+    size: 11in 17in;
+    margin: 12mm;
+  }
+
+  body {
+    background: white;
+    color: black;
+  }
+
+  #generated-plan table {
+    font-size: 12px;
+  }
+
+  #generated-plan tr,
+  #generated-plan .role-marker {
+    break-inside: avoid;
+  }
+
+  .leaflet-control-container {
+    display: none !important;
+  }
+
+  .leaflet-container,
+  .leaflet-marker-icon,
+  .leaflet-tile,
+  .role-marker div {
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+}
