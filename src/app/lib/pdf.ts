@@ -1,3 +1,9 @@
+import {
+  PRINT_MARGIN_MM,
+  TABLOID_HEIGHT_MM,
+  TABLOID_WIDTH_MM,
+} from "./print";
+
 export async function exportElementToPdf(
   element: HTMLElement,
   fileName: string
@@ -17,12 +23,12 @@ export async function exportElementToPdf(
   const pdf = new jsPDF({
     orientation: "portrait",
     unit: "mm",
-    format: "a4",
+    format: [TABLOID_WIDTH_MM, TABLOID_HEIGHT_MM],
   });
 
   const pageWidthMm = pdf.internal.pageSize.getWidth();
   const pageHeightMm = pdf.internal.pageSize.getHeight();
-  const marginMm = 10;
+  const marginMm = PRINT_MARGIN_MM;
   const contentWidthMm = pageWidthMm - marginMm * 2;
   const contentHeightMm = pageHeightMm - marginMm * 2;
 
@@ -64,7 +70,7 @@ export async function exportElementToPdf(
     const sliceHeightMm = sliceHeightPx / pxPerMm;
 
     if (pageIndex > 0) {
-      pdf.addPage();
+      pdf.addPage([TABLOID_WIDTH_MM, TABLOID_HEIGHT_MM]);
     }
 
     pdf.addImage(

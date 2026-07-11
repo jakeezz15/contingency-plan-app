@@ -3,15 +3,12 @@
 import { useEffect, useState } from "react";
 import { geocodeAddress } from "@/app/lib/geocode";
 import { findNearestMeetingPoint, formatDistanceKm } from "@/app/lib/geo";
+import {
+  formatRoleOption,
+  getRoleDefinition,
+  ROLE_DEFINITIONS,
+} from "@/app/lib/roles";
 import type { GeocodeResult, MeetingPoint, Person } from "@/app/types";
-
-const ROLE_OPTIONS = [
-  "Team Lead",
-  "Backup Contact",
-  "Family",
-  "Staff",
-  "Other",
-];
 
 type PersonCardProps = {
   person: Person;
@@ -39,14 +36,26 @@ export default function PersonCard({
   }
 
   const nearest = findNearestMeetingPoint(person, meetingPoints);
+  const roleDefinition = getRoleDefinition(person.role);
 
   return (
     <div className="rounded-lg border border-gray-200 p-4">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="font-semibold text-gray-900">{person.name}</p>
+          <div className="flex items-center gap-2">
+            <span
+              className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 border-white text-sm shadow-sm"
+              style={{ backgroundColor: roleDefinition.color }}
+              aria-hidden="true"
+            >
+              {roleDefinition.emoji}
+            </span>
+            <p className="font-semibold text-gray-900">{person.name}</p>
+          </div>
           {person.role && (
-            <p className="text-sm font-medium text-blue-700">{person.role}</p>
+            <p className="mt-1 text-sm font-medium text-blue-700">
+              {person.role}
+            </p>
           )}
           {person.phone && (
             <p className="text-sm text-gray-700">{person.phone}</p>
@@ -193,9 +202,9 @@ function PersonEditForm({ person, onCancel, onSave }: PersonEditFormProps) {
           onChange={(e) => setRole(e.target.value)}
         >
           <option value="">Select a role (optional)</option>
-          {ROLE_OPTIONS.map((option) => (
-            <option key={option} value={option}>
-              {option}
+          {ROLE_DEFINITIONS.map((definition) => (
+            <option key={definition.label} value={definition.label}>
+              {formatRoleOption(definition)}
             </option>
           ))}
         </select>
