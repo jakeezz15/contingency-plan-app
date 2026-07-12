@@ -22,11 +22,24 @@
     display: none !important;
   }
 
-  .leaflet-container,
+  .leaflet-container {
+    background: #ffffff !important;
+  }
+
   .leaflet-marker-icon,
   .leaflet-tile,
   .role-marker div {
     print-color-adjust: exact;
     -webkit-print-color-adjust: exact;
   }
+
+  .map-print-target {
+    height: 9.5in !important;
+    min-height: 9.5in !important;
+  }
+}
+
+html.preparing-print .map-print-target {
+  height: 9.5in !important;
+  min-height: 9.5in !important;
 }

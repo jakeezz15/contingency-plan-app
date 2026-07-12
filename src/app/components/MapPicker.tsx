@@ -16,6 +16,7 @@ import {
   type RoleDefinition,
 } from "@/app/lib/roles";
 import type { MeetingPoint, Person, SelectedLocation } from "@/app/types";
+import { PREPARE_MAP_PRINT_EVENT } from "@/app/lib/mapPrint";
 
 type MapPickerProps = {
   people: Person[];
@@ -25,6 +26,8 @@ type MapPickerProps = {
   large?: boolean;
   showLegend?: boolean;
   mapKey?: string;
+  className?: string;
+  enablePrintPrepare?: boolean;
 };
 
 delete (L.Icon.Default.prototype as unknown as { _getIconUrl?: unknown })
@@ -68,6 +71,116 @@ function getPersonMarkerIcon(role: string) {
   return createMarkerIcon(getRoleDefinition(role));
 }
 
+function getMarkerBounds(
+  people: Person[],
+  meetingPoints: MeetingPoint[]
+): L.LatLngBounds | null {
+  const allPoints = [
+    ...people.map((person) => [person.lat, person.lng] as [number, number]),
+    ...meetingPoints.map(
+      (point) => [point.lat, point.lng] as [number, number]
+    ),
+  ];
+
+  if (allPoints.length === 0) {
+    return null;
+  }
+
+  return L.latLngBounds(allPoints);
+}
+
+function fitMapToContent(
+  map: L.Map,
+  people: Person[],
+  meetingPoints: MeetingPoint[],
+  selectedLocation: SelectedLocation,
+  selectedMeetingLocation?: SelectedLocation
+) {
+  if (selectedLocation) {
+    map.setView([selectedLocation.lat, selectedLocation.lng], 15, {
+      animate: false,
+    });
+    return;
+  }
+
+  if (selectedMeetingLocation) {
+    map.setView(
+      [selectedMeetingLocation.lat, selectedMeetingLocation.lng],
+      15,
+      { animate: false }
+    );
+    return;
+  }
+
+  const bounds = getMarkerBounds(people, meetingPoints);
+
+  if (bounds) {
+    map.fitBounds(bounds, {
+      padding: [40, 40],
+      maxZoom: 15,
+      animate: false,
+    });
+  }
+}
+
+function waitForVisibleTiles(map: L.Map, finish: () => void, maxWaitMs: number) {
+  let finished = false;
+
+  const done = () => {
+    if (finished) return;
+    finished = true;
+    window.setTimeout(finish, 300);
+  };
+
+  window.setTimeout(done, maxWaitMs);
+
+  map.once("moveend", () => {
+    let tileLayers = 0;
+    let tilesReady = 0;
+
+    map.eachLayer((layer) => {
+      if (!(layer instanceof L.TileLayer)) return;
+
+      tileLayers += 1;
+      const tileLayer = layer as L.TileLayer & { _loading?: boolean };
+
+      if (tileLayer._loading) {
+        tileLayer.once("load", () => {
+          tilesReady += 1;
+          if (tilesReady >= tileLayers) {
+            done();
+          }
+        });
+      } else {
+        tilesReady += 1;
+      }
+    });
+
+    if (tileLayers === 0 || tilesReady >= tileLayers) {
+      done();
+    }
+  });
+}
+
+function prepareMapInstance(
+  map: L.Map,
+  people: Person[],
+  meetingPoints: MeetingPoint[],
+  selectedLocation: SelectedLocation,
+  selectedMeetingLocation: SelectedLocation | undefined,
+  finish: () => void
+) {
+  waitForVisibleTiles(map, finish, 2500);
+  map.invalidateSize({ animate: false });
+  fitMapToContent(
+    map,
+    people,
+    meetingPoints,
+    selectedLocation,
+    selectedMeetingLocation
+  );
+}
+
 function MapController({
   people,
   meetingPoints,
@@ -95,16 +208,9 @@ function MapController({
       return;
     }
 
-    const allPoints = [
-      ...people.map((person) => [person.lat, person.lng] as [number, number]),
-      ...meetingPoints.map(
-        (point) => [point.lat, point.lng] as [number, number]
-      ),
-    ];
+    const bounds = getMarkerBounds(people, meetingPoints);
 
-    if (allPoints.length > 0) {
-      const bounds = L.latLngBounds(allPoints);
-
+    if (bounds) {
       map.fitBounds(bounds, {
         padding: [40, 40],
         maxZoom: 15,
@@ -112,14 +218,57 @@ function MapController({
     }
   }, [map, people, meetingPoints, selectedLocation, selectedMeetingLocation]);
 
+  return null;
+}
+
+function PrintMapPreparer({
+  people,
+  meetingPoints,
+  selectedLocation,
+  selectedMeetingLocation,
+}: {
+  people: Person[];
+  meetingPoints: MeetingPoint[];
+  selectedLocation: SelectedLocation;
+  selectedMeetingLocation?: SelectedLocation;
+}) {
+  const map = useMap();
+
   useEffect(() => {
     function handleBeforePrint() {
-      map.invalidateSize();
+      prepareMapInstance(
+        map,
+        people,
+        meetingPoints,
+        selectedLocation,
+        selectedMeetingLocation,
+        () => {}
+      );
+    }
+
+    function handlePreparePrint(event: Event) {
+      const finish = (event as CustomEvent<{ finish: () => void }>).detail
+        ?.finish;
+      if (!finish) return;
+
+      prepareMapInstance(
+        map,
+        people,
+        meetingPoints,
+        selectedLocation,
+        selectedMeetingLocation,
+        finish
+      );
     }
 
     window.addEventListener("beforeprint", handleBeforePrint);
-    return () => window.removeEventListener("beforeprint", handleBeforePrint);
-  }, [map]);
+    window.addEventListener(PREPARE_MAP_PRINT_EVENT, handlePreparePrint);
+
+    return () => {
+      window.removeEventListener("beforeprint", handleBeforePrint);
+      window.removeEventListener(PREPARE_MAP_PRINT_EVENT, handlePreparePrint);
+    };
+  }, [map, people, meetingPoints, selectedLocation, selectedMeetingLocation]);
 
   return null;
 }
@@ -165,7 +314,7 @@ function MapLegend({
   }
 
   return (
-    <div className="pointer-events-none absolute bottom-3 left-3 z-[1000] max-w-[220px] rounded-lg border border-gray-200 bg-white/95 p-3 shadow-lg backdrop-blur-sm print:bg-white">
+    <div className="pointer-events-none absolute bottom-3 left-3 z-10 max-w-[220px] rounded-lg border border-gray-200 bg-white/95 p-3 shadow-lg backdrop-blur-sm print:bg-white">
       <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-700">
         Legend
       </p>
@@ -199,12 +348,17 @@ export default function MapPicker({
   large = false,
   showLegend = true,
   mapKey = "map",
+  className,
+  enablePrintPrepare = false,
 }: MapPickerProps) {
+  const heightClass =
+    className ?? (large ? "h-[500px] print:h-[9.5in]" : "h-96");
+
   return (
     <div
-      className={`relative ${
-        large ? "h-[500px] print:h-[9.5in]" : "h-96"
-      } overflow-hidden rounded-xl border border-gray-300 print:break-inside-avoid`}
+      className={`relative isolate z-0 overflow-hidden rounded-xl border border-gray-300 print:break-inside-avoid ${heightClass} ${
+        enablePrintPrepare ? "map-print-target" : ""
+      }`}
     >
       <MapContainer
         key={mapKey}
@@ -225,6 +379,15 @@ export default function MapPicker({
           selectedLocation={selectedLocation}
           selectedMeetingLocation={selectedMeetingLocation}
         />
+
+        {enablePrintPrepare && (
+          <PrintMapPreparer
+            people={people}
+            meetingPoints={meetingPoints}
+            selectedLocation={selectedLocation}
+            selectedMeetingLocation={selectedMeetingLocation}
+          />
+        )}
 
         {selectedLocation && (
           <Marker position={[selectedLocation.lat, selectedLocation.lng]}>
