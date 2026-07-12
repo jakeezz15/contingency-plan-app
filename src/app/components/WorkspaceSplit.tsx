@@ -16,7 +16,7 @@ export default function WorkspaceSplit({ workspace, map }: WorkspaceSplitProps) 
       </div>
 
       <div className="hidden lg:grid lg:grid-cols-5 lg:items-start lg:gap-6">
-        <div className="lg:sticky lg:top-40 lg:col-span-2 lg:max-h-[calc(100vh-10rem)] lg:self-start">
+        <div className="lg:sticky  lg:col-span-2 lg:max-h-[calc(100vh-10rem)] lg:self-start">
           <div className="overflow-y-auto overscroll-y-contain rounded-xl border border-gray-200 bg-white p-4 shadow-sm lg:max-h-[calc(100vh-10rem)]">
             {workspace}
           </div>
