@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
+import { buildCompactAddress } from "@/app/lib/address";
+
 export async function GET(request: NextRequest) {
   const query = request.nextUrl.searchParams.get("q")?.trim();
 
@@ -14,6 +16,7 @@ export async function GET(request: NextRequest) {
   url.searchParams.set("format", "json");
   url.searchParams.set("q", query);
   url.searchParams.set("limit", "1");
+  url.searchParams.set("addressdetails", "1");
 
   try {
     const response = await fetch(url.toString(), {
@@ -40,9 +43,14 @@ export async function GET(request: NextRequest) {
     }
 
     const location = data[0];
+    const displayName = location.display_name as string;
+    const nominatimAddress = (location.address ?? {}) as Record<string, string>;
+    const compactAddress =
+      buildCompactAddress(nominatimAddress, query) || displayName;
 
     return NextResponse.json({
-      displayName: location.display_name as string,
+      displayName,
+      compactAddress,
       lat: Number(location.lat),
       lng: Number(location.lon),
     });

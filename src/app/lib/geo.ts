@@ -34,26 +34,27 @@ export function formatDistanceKm(km: number) {
   return `${km.toFixed(1)} km`;
 }
 
-export type NearestMeetingPoint = {
+export type MeetingPointDistance = {
   point: MeetingPoint;
   distanceKm: number;
 };
 
+export function getMeetingPointsByDistance(
+  person: Person,
+  meetingPoints: MeetingPoint[]
+): MeetingPointDistance[] {
+  return meetingPoints
+    .map((point) => ({
+      point,
+      distanceKm: haversineDistanceKm(person, point),
+    }))
+    .sort((a, b) => a.distanceKm - b.distanceKm);
+}
+
 export function findNearestMeetingPoint(
   person: Person,
   meetingPoints: MeetingPoint[]
-): NearestMeetingPoint | null {
-  if (meetingPoints.length === 0) return null;
-
-  let nearest: NearestMeetingPoint | null = null;
-
-  for (const point of meetingPoints) {
-    const distanceKm = haversineDistanceKm(person, point);
-
-    if (!nearest || distanceKm < nearest.distanceKm) {
-      nearest = { point, distanceKm };
-    }
-  }
-
-  return nearest;
+): MeetingPointDistance | null {
+  const ranked = getMeetingPointsByDistance(person, meetingPoints);
+  return ranked[0] ?? null;
 }

@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { formatCompactAddress } from "@/app/lib/address";
 import { geocodeAddress } from "@/app/lib/geocode";
-import { findNearestMeetingPoint, formatDistanceKm } from "@/app/lib/geo";
+import MeetingPointDistances from "@/app/components/MeetingPointDistances";
 import {
   formatRoleOption,
   getRoleDefinition,
@@ -35,7 +36,6 @@ export default function PersonCard({
     );
   }
 
-  const nearest = findNearestMeetingPoint(person, meetingPoints);
   const roleDefinition = getRoleDefinition(person.role);
 
   return (
@@ -60,16 +60,17 @@ export default function PersonCard({
           {person.phone && (
             <p className="text-sm text-gray-700">{person.phone}</p>
           )}
-          <p className="text-sm text-gray-600">{person.address}</p>
+          <p className="text-sm text-gray-600">
+            {formatCompactAddress(person.address)}
+          </p>
           <p className="mt-1 text-xs text-gray-400">
             {person.lat.toFixed(5)}, {person.lng.toFixed(5)}
           </p>
-          {nearest && (
-            <p className="mt-1 text-xs text-red-600">
-              🚩 Nearest meeting point: {nearest.point.name} (
-              {formatDistanceKm(nearest.distanceKm)})
-            </p>
-          )}
+          <MeetingPointDistances
+            person={person}
+            meetingPoints={meetingPoints}
+            variant="card"
+          />
         </div>
 
         <div className="flex flex-col gap-2">
@@ -168,7 +169,7 @@ function PersonEditForm({ person, onCancel, onSave }: PersonEditFormProps) {
       role: role.trim(),
       phone: phone.trim(),
       address: addressChanged
-        ? confirmedLocation!.displayName
+        ? confirmedLocation!.compactAddress
         : person.address,
       lat: addressChanged ? confirmedLocation!.lat : person.lat,
       lng: addressChanged ? confirmedLocation!.lng : person.lng,
@@ -240,7 +241,7 @@ function PersonEditForm({ person, onCancel, onSave }: PersonEditFormProps) {
         {pendingGeocode && !confirmedLocation && (
           <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
             <p className="font-medium">Did you mean this address?</p>
-            <p className="mt-1">{pendingGeocode.displayName}</p>
+            <p className="mt-1">{pendingGeocode.compactAddress}</p>
             <button
               onClick={confirmAddress}
               className="mt-3 rounded-lg bg-amber-600 px-3 py-2 font-semibold text-white hover:bg-amber-700"
