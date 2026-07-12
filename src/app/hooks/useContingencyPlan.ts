@@ -294,7 +294,7 @@ export function useContingencyPlan() {
     const newPerson: Person = {
       id: Date.now(),
       name: name.trim(),
-      address: pendingGeocode?.displayName ?? address.trim(),
+      address: pendingGeocode?.compactAddress ?? address.trim(),
       phone: phone.trim(),
       role: role.trim(),
       lat: selectedLocation.lat,
@@ -340,7 +340,7 @@ export function useContingencyPlan() {
     const newMeetingPoint: MeetingPoint = {
       id: Date.now(),
       name: meetingPointName.trim(),
-      address: pendingMeetingGeocode?.displayName ?? meetingPointAddress.trim(),
+      address: pendingMeetingGeocode?.compactAddress ?? meetingPointAddress.trim(),
       notes: meetingPointNotes.trim(),
       lat: selectedMeetingLocation.lat,
       lng: selectedMeetingLocation.lng,

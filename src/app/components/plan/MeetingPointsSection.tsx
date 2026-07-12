@@ -109,7 +109,7 @@ export default function MeetingPointsSection({
         {pendingMeetingGeocode && !selectedMeetingLocation && (
           <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
             <p className="font-medium">Did you mean this address?</p>
-            <p className="mt-1">{pendingMeetingGeocode.displayName}</p>
+            <p className="mt-1">{pendingMeetingGeocode.compactAddress}</p>
             <button
               type="button"
               onClick={onConfirmAddress}

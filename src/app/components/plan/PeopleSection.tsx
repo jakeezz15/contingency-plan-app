@@ -147,7 +147,7 @@ export default function PeopleSection({
         {pendingGeocode && !selectedLocation && (
           <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
             <p className="font-medium">Did you mean this address?</p>
-            <p className="mt-1">{pendingGeocode.displayName}</p>
+            <p className="mt-1">{pendingGeocode.compactAddress}</p>
             <button
               type="button"
               onClick={onConfirmAddress}

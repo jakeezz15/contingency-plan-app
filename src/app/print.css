@@ -28,7 +28,9 @@
 
   .leaflet-marker-icon,
   .leaflet-tile,
-  .role-marker div {
+  .role-marker div,
+  .marker-label-text,
+  .map-legend-swatch {
     print-color-adjust: exact;
     -webkit-print-color-adjust: exact;
   }

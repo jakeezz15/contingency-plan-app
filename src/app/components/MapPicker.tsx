@@ -1,7 +1,7 @@
 "use client";
 
 import L from "leaflet";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   MapContainer,
   Marker,
@@ -10,6 +10,7 @@ import {
   useMap,
 } from "react-leaflet";
 
+import { formatCompactAddress } from "@/app/lib/address";
 import {
   getRoleDefinition,
   MEETING_POINT_LEGEND,
@@ -18,6 +19,9 @@ import {
 import type { MeetingPoint, Person, SelectedLocation } from "@/app/types";
 import { PREPARE_MAP_PRINT_EVENT } from "@/app/lib/mapPrint";
 
+type LegendSize = "default" | "compact";
+type LegendPlacement = "overlay" | "below";
+
 type MapPickerProps = {
   people: Person[];
   meetingPoints: MeetingPoint[];
@@ -25,6 +29,8 @@ type MapPickerProps = {
   selectedMeetingLocation?: SelectedLocation;
   large?: boolean;
   showLegend?: boolean;
+  legendSize?: LegendSize;
+  legendPlacement?: LegendPlacement;
   mapKey?: string;
   className?: string;
   enablePrintPrepare?: boolean;
@@ -41,34 +47,69 @@ L.Icon.Default.mergeOptions({
 });
 
 const roleIconCache = new Map<string, L.DivIcon>();
+const labeledMarkerIconCache = new Map<string, L.DivIcon>();
 
-function createMarkerIcon(definition: RoleDefinition) {
-  const cacheKey = `${definition.label}:${definition.emoji}:${definition.color}`;
+const MARKER_PIN_SIZE = 32;
+const MARKER_LABEL_MAX_WIDTH = 76;
 
-  if (roleIconCache.has(cacheKey)) {
-    return roleIconCache.get(cacheKey)!;
+function escapeHtml(text: string) {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function createMarkerIcon(definition: RoleDefinition, label?: string) {
+  const cacheKey = label
+    ? `${definition.label}:${definition.emoji}:${definition.color}:${label}`
+    : `${definition.label}:${definition.emoji}:${definition.color}`;
+  const cache = label ? labeledMarkerIconCache : roleIconCache;
+
+  if (cache.has(cacheKey)) {
+    return cache.get(cacheKey)!;
   }
 
+  const pinHtml =
+    `<div style="width:${MARKER_PIN_SIZE}px;height:${MARKER_PIN_SIZE}px;border-radius:50%;background:${definition.color};` +
+    "border:3px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.35);" +
+    'display:flex;align-items:center;justify-content:center;font-size:15px;line-height:1;">' +
+    `${definition.emoji}</div>`;
+
+  const labelHtml = label
+    ? `<div class="marker-label-text" style="margin-top:2px;max-width:${MARKER_LABEL_MAX_WIDTH}px;padding:1px 5px;` +
+      "border-radius:4px;border:1px solid rgba(0,0,0,0.12);background:rgba(255,255,255,0.96);" +
+      "box-shadow:0 1px 3px rgba(0,0,0,0.2);font-size:9px;font-weight:600;line-height:1.2;" +
+      'color:#1f2937;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' +
+      `${escapeHtml(label)}</div>`
+    : "";
+
+  const iconWidth = label ? MARKER_LABEL_MAX_WIDTH : MARKER_PIN_SIZE;
+  const iconHeight = label ? MARKER_PIN_SIZE + 18 : MARKER_PIN_SIZE;
+
   const icon = L.divIcon({
-    className: "role-marker",
+    className: label ? "role-marker role-marker--labeled" : "role-marker",
     html:
-      `<div style="width:32px;height:32px;border-radius:50%;background:${definition.color};` +
-      "border:3px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.35);" +
-      'display:flex;align-items:center;justify-content:center;font-size:15px;line-height:1;">' +
-      `${definition.emoji}</div>`,
-    iconSize: [32, 32],
-    iconAnchor: [16, 16],
-    popupAnchor: [0, -16],
+      `<div style="display:flex;flex-direction:column;align-items:center;width:${iconWidth}px;">` +
+      `${pinHtml}${labelHtml}</div>`,
+    iconSize: [iconWidth, iconHeight],
+    iconAnchor: [iconWidth / 2, MARKER_PIN_SIZE / 2],
+    popupAnchor: [0, -MARKER_PIN_SIZE / 2],
   });
 
-  roleIconCache.set(cacheKey, icon);
+  cache.set(cacheKey, icon);
   return icon;
 }
 
 const meetingPointIcon = createMarkerIcon(MEETING_POINT_LEGEND);
 
-function getPersonMarkerIcon(role: string) {
-  return createMarkerIcon(getRoleDefinition(role));
+function getPersonMarkerIcon(role: string, name: string) {
+  return createMarkerIcon(getRoleDefinition(role), name);
+}
+
+function getMeetingPointMarkerIcon(name: string) {
+  return createMarkerIcon(MEETING_POINT_LEGEND, name);
 }
 
 function getMarkerBounds(
@@ -273,10 +314,21 @@ function PrintMapPreparer({
   return null;
 }
 
-function LegendSwatch({ definition }: { definition: RoleDefinition }) {
+function LegendSwatch({
+  definition,
+  size = "default",
+}: {
+  definition: RoleDefinition;
+  size?: LegendSize;
+}) {
+  const sizeClass =
+    size === "compact"
+      ? "h-4 w-4 border text-[9px]"
+      : "h-6 w-6 border-2 text-xs";
+
   return (
     <span
-      className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 border-white text-xs shadow-sm"
+      className={`map-legend-swatch inline-flex shrink-0 items-center justify-center rounded-full border-white shadow-sm ${sizeClass}`}
       style={{ backgroundColor: definition.color }}
       aria-hidden="true"
     >
@@ -285,14 +337,8 @@ function LegendSwatch({ definition }: { definition: RoleDefinition }) {
   );
 }
 
-function MapLegend({
-  people,
-  meetingPoints,
-}: {
-  people: Person[];
-  meetingPoints: MeetingPoint[];
-}) {
-  const legendItems = useMemo(() => {
+function useLegendItems(people: Person[]) {
+  return useMemo(() => {
     const seen = new Set<string>();
     const items: RoleDefinition[] = [];
 
@@ -308,35 +354,130 @@ function MapLegend({
 
     return items;
   }, [people]);
+}
+
+function MapLegend({
+  people,
+  meetingPoints,
+  size = "default",
+  placement = "overlay",
+}: {
+  people: Person[];
+  meetingPoints: MeetingPoint[];
+  size?: LegendSize;
+  placement?: LegendPlacement;
+}) {
+  const legendItems = useLegendItems(people);
+  const isCompact = size === "compact";
+  const isBelow = placement === "below";
 
   if (legendItems.length === 0 && meetingPoints.length === 0) {
     return null;
   }
 
+  const containerClass = isBelow
+    ? "mt-3 rounded-lg border border-gray-200 bg-gray-50 p-3 print:break-inside-avoid print:bg-white"
+    : isCompact
+      ? "pointer-events-none absolute bottom-2 left-2 z-10 max-w-[150px] rounded-md border border-gray-200 bg-white/90 p-1.5 shadow-md backdrop-blur-sm"
+      : "pointer-events-none absolute bottom-3 left-3 z-10 max-w-[220px] rounded-lg border border-gray-200 bg-white/95 p-3 shadow-lg backdrop-blur-sm";
+
+  const titleClass = isCompact
+    ? "mb-1 text-[10px] font-semibold uppercase tracking-wide text-gray-600"
+    : "mb-2 text-xs font-semibold uppercase tracking-wide text-gray-700";
+
+  const itemClass = isBelow
+    ? "flex items-center gap-2 text-xs text-gray-800"
+    : isCompact
+      ? "flex items-center gap-1.5 text-[10px] leading-tight text-gray-800"
+      : "flex items-center gap-2 text-xs text-gray-800";
+
+  const listClass = isBelow
+    ? "flex flex-wrap gap-x-4 gap-y-2"
+    : isCompact
+      ? "space-y-1"
+      : "space-y-1.5";
+
   return (
-    <div className="pointer-events-none absolute bottom-3 left-3 z-10 max-w-[220px] rounded-lg border border-gray-200 bg-white/95 p-3 shadow-lg backdrop-blur-sm print:bg-white">
-      <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-700">
-        Legend
-      </p>
-      <ul className="space-y-1.5">
+    <div className={containerClass}>
+      <p className={titleClass}>Legend</p>
+      <ul className={listClass}>
         {legendItems.map((definition) => (
           <li
             key={definition.label || "default"}
-            className="flex items-center gap-2 text-xs text-gray-800"
+            className={itemClass}
           >
-            <LegendSwatch definition={definition} />
+            <LegendSwatch definition={definition} size={size} />
             <span>{definition.label || "No role assigned"}</span>
           </li>
         ))}
 
         {meetingPoints.length > 0 && (
-          <li className="flex items-center gap-2 text-xs text-gray-800">
-            <LegendSwatch definition={MEETING_POINT_LEGEND} />
+          <li className={itemClass}>
+            <LegendSwatch definition={MEETING_POINT_LEGEND} size={size} />
             <span>{MEETING_POINT_LEGEND.label}</span>
           </li>
         )}
       </ul>
     </div>
+  );
+}
+
+function MapInteractionController({ enabled }: { enabled: boolean }) {
+  const map = useMap();
+
+  useEffect(() => {
+    const handlers = [
+      map.dragging,
+      map.scrollWheelZoom,
+      map.doubleClickZoom,
+      map.touchZoom,
+      map.boxZoom,
+    ];
+
+    if (enabled) {
+      handlers.forEach((handler) => handler.enable());
+      return;
+    }
+
+    handlers.forEach((handler) => handler.disable());
+  }, [map, enabled]);
+
+  return null;
+}
+
+function MapInteractionShield({
+  active,
+  onActivate,
+  onDeactivate,
+}: {
+  active: boolean;
+  onActivate: () => void;
+  onDeactivate: () => void;
+}) {
+  if (active) {
+    return (
+      <button
+        type="button"
+        onClick={onDeactivate}
+        className="absolute top-2 right-2 z-[1001] rounded-md border border-gray-200 bg-white/95 px-2.5 py-1 text-xs font-medium text-gray-700 shadow-sm backdrop-blur-sm hover:bg-white print:hidden"
+        aria-label="Lock map to prevent accidental dragging"
+      >
+        Lock map
+      </button>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={onActivate}
+      className="absolute inset-0 z-[1001] flex cursor-default items-center justify-center bg-transparent print:hidden"
+      aria-label="Enable map interaction"
+    >
+      <span className="pointer-events-none rounded-lg border border-gray-200 bg-white/90 px-3 py-1.5 text-xs font-medium text-gray-600 shadow-sm backdrop-blur-sm">
+        Click to move map
+      </span>
+    </button>
   );
 }
 
@@ -347,24 +488,37 @@ export default function MapPicker({
   selectedMeetingLocation,
   large = false,
   showLegend = true,
+  legendSize = "default",
+  legendPlacement = "overlay",
   mapKey = "map",
   className,
   enablePrintPrepare = false,
 }: MapPickerProps) {
+  const [isMapInteractive, setIsMapInteractive] = useState(false);
   const heightClass =
     className ?? (large ? "h-[500px] print:h-[9.5in]" : "h-96");
+  const showOverlayLegend =
+    showLegend && legendPlacement === "overlay";
+  const showBelowLegend =
+    showLegend && legendPlacement === "below";
 
   return (
+    <div className={legendPlacement === "below" ? "print:break-inside-avoid" : undefined}>
     <div
       className={`relative isolate z-0 overflow-hidden rounded-xl border border-gray-300 print:break-inside-avoid ${heightClass} ${
         enablePrintPrepare ? "map-print-target" : ""
       }`}
+      onMouseLeave={() => setIsMapInteractive(false)}
     >
       <MapContainer
         key={mapKey}
         center={[60.1699, 24.9384]}
         zoom={11}
-        scrollWheelZoom={true}
+        dragging={isMapInteractive}
+        scrollWheelZoom={isMapInteractive}
+        doubleClickZoom={isMapInteractive}
+        touchZoom={isMapInteractive}
+        boxZoom={isMapInteractive}
         className="h-full w-full"
       >
         <TileLayer
@@ -379,6 +533,8 @@ export default function MapPicker({
           selectedLocation={selectedLocation}
           selectedMeetingLocation={selectedMeetingLocation}
         />
+
+        <MapInteractionController enabled={isMapInteractive} />
 
         {enablePrintPrepare && (
           <PrintMapPreparer
@@ -411,7 +567,7 @@ export default function MapPicker({
             <Marker
               key={person.id}
               position={[person.lat, person.lng]}
-              icon={getPersonMarkerIcon(person.role)}
+              icon={getPersonMarkerIcon(person.role, person.name)}
             >
               <Popup>
                 <strong>
@@ -430,7 +586,7 @@ export default function MapPicker({
                   </>
                 )}
                 <br />
-                {person.address}
+                {formatCompactAddress(person.address)}
               </Popup>
             </Marker>
           );
@@ -440,12 +596,12 @@ export default function MapPicker({
           <Marker
             key={point.id}
             position={[point.lat, point.lng]}
-            icon={meetingPointIcon}
+            icon={getMeetingPointMarkerIcon(point.name)}
           >
             <Popup>
               <strong>🚩 {point.name}</strong>
               <br />
-              {point.address}
+              {formatCompactAddress(point.address)}
               {point.notes && (
                 <>
                   <br />
@@ -457,9 +613,30 @@ export default function MapPicker({
         ))}
       </MapContainer>
 
-      {showLegend && (
-        <MapLegend people={people} meetingPoints={meetingPoints} />
+      <MapInteractionShield
+        active={isMapInteractive}
+        onActivate={() => setIsMapInteractive(true)}
+        onDeactivate={() => setIsMapInteractive(false)}
+      />
+
+      {showOverlayLegend && (
+        <MapLegend
+          people={people}
+          meetingPoints={meetingPoints}
+          size={legendSize}
+          placement="overlay"
+        />
       )}
+    </div>
+
+    {showBelowLegend && (
+      <MapLegend
+        people={people}
+        meetingPoints={meetingPoints}
+        size={legendSize}
+        placement="below"
+      />
+    )}
     </div>
   );
 }

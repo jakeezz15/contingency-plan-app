@@ -34,6 +34,7 @@ export type SelectedLocation = {
 
 export type GeocodeResult = {
   displayName: string;
+  compactAddress: string;
   lat: number;
   lng: number;
 };

@@ -4,7 +4,8 @@ import dynamic from "next/dynamic";
 import { forwardRef } from "react";
 import ClientOnly from "@/app/components/ClientOnly";
 import MapPlaceholder from "@/app/components/MapPlaceholder";
-import { findNearestMeetingPoint, formatDistanceKm } from "@/app/lib/geo";
+import { formatCompactAddress } from "@/app/lib/address";
+import MeetingPointDistances from "@/app/components/MeetingPointDistances";
 import { formatPlanDate } from "@/app/lib/plans";
 import type { MeetingPoint, Person } from "@/app/types";
 
@@ -101,7 +102,7 @@ const GeneratedPlanSection = forwardRef<HTMLElement, GeneratedPlanSectionProps>(
             meetingPoints={meetingPoints}
             selectedLocation={null}
             large
-            showLegend={false}
+            legendPlacement="below"
             enablePrintPrepare
             className="h-[650px] print:h-[9.5in]"
           />
@@ -124,38 +125,34 @@ const GeneratedPlanSection = forwardRef<HTMLElement, GeneratedPlanSectionProps>(
                   <th className="border-b p-3 font-semibold">Coordinates</th>
                   {meetingPoints.length > 0 && (
                     <th className="border-b p-3 font-semibold">
-                      Nearest Meeting Point
+                      Meeting Points (distance)
                     </th>
                   )}
                 </tr>
               </thead>
 
               <tbody>
-                {people.map((person, index) => {
-                  const nearest = findNearestMeetingPoint(person, meetingPoints);
-
-                  return (
+                {people.map((person, index) => (
                     <tr key={person.id} className="print:break-inside-avoid">
                       <td className="border-b p-3">{index + 1}</td>
                       <td className="border-b p-3 font-medium">{person.name}</td>
                       <td className="border-b p-3">{person.role || "—"}</td>
                       <td className="border-b p-3">{person.phone || "—"}</td>
-                      <td className="border-b p-3">{person.address}</td>
+                      <td className="border-b p-3">{formatCompactAddress(person.address)}</td>
                       <td className="border-b p-3 text-gray-600">
                         {person.lat.toFixed(5)}, {person.lng.toFixed(5)}
                       </td>
                       {meetingPoints.length > 0 && (
                         <td className="border-b p-3">
-                          {nearest
-                            ? `🚩 ${nearest.point.name} (${formatDistanceKm(
-                                nearest.distanceKm
-                              )})`
-                            : "—"}
+                          <MeetingPointDistances
+                            person={person}
+                            meetingPoints={meetingPoints}
+                            variant="table"
+                          />
                         </td>
                       )}
                     </tr>
-                  );
-                })}
+                  ))}
               </tbody>
             </table>
           </div>
@@ -186,7 +183,7 @@ const GeneratedPlanSection = forwardRef<HTMLElement, GeneratedPlanSectionProps>(
                       <td className="border-b p-3 font-medium">
                         🚩 {point.name}
                       </td>
-                      <td className="border-b p-3">{point.address}</td>
+                      <td className="border-b p-3">{formatCompactAddress(point.address)}</td>
                       <td className="border-b p-3">{point.notes || "—"}</td>
                       <td className="border-b p-3 text-gray-600">
                         {point.lat.toFixed(5)}, {point.lng.toFixed(5)}

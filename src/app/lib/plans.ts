@@ -11,6 +11,7 @@ export function formatPlanDate(isoDate: string) {
     year: "numeric",
     month: "long",
     day: "numeric",
+    timeZone: "UTC",
   });
 }
 

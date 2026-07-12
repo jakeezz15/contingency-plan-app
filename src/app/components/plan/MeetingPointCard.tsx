@@ -1,3 +1,4 @@
+import { formatCompactAddress } from "@/app/lib/address";
 import type { MeetingPoint } from "@/app/types";
 
 type MeetingPointCardProps = {
@@ -14,7 +15,9 @@ export default function MeetingPointCard({
       <div className="flex items-start justify-between gap-4">
         <div>
           <p className="font-semibold text-gray-900">🚩 {point.name}</p>
-          <p className="text-sm text-gray-600">{point.address}</p>
+          <p className="text-sm text-gray-600">
+            {formatCompactAddress(point.address)}
+          </p>
           {point.notes && (
             <p className="mt-1 text-sm text-gray-500">{point.notes}</p>
           )}

@@ -30,20 +30,7 @@ export default function MapPreviewPanel({
         id="map-preview"
         className="scroll-mt-44 rounded-xl bg-white p-4 shadow sm:p-6"
       >
-        <div className="mb-4 flex items-center justify-between gap-3">
-          <h2 className="text-xl font-semibold text-gray-900">Map Preview</h2>
-
-          <div className="flex items-center gap-4 text-xs text-gray-600">
-            <span className="flex items-center gap-1">
-              <span className="inline-block h-3 w-3 rounded-full bg-blue-600" />
-              Person
-            </span>
-            <span className="flex items-center gap-1">
-              <span className="inline-block h-3 w-3 rounded-full bg-red-600" />
-              Meeting point
-            </span>
-          </div>
-        </div>
+        <h2 className="mb-4 text-xl font-semibold text-gray-900">Map Preview</h2>
 
         <ClientOnly fallback={<MapPlaceholder className={MAP_HEIGHT_CLASS} />}>
           <MapPicker
@@ -52,6 +39,7 @@ export default function MapPreviewPanel({
             meetingPoints={meetingPoints}
             selectedLocation={selectedLocation}
             selectedMeetingLocation={selectedMeetingLocation}
+            legendSize="compact"
             className={MAP_HEIGHT_CLASS}
           />
         </ClientOnly>
