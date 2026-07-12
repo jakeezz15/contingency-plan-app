@@ -11,6 +11,7 @@ import {
 } from "react-leaflet";
 
 import { formatCompactAddress } from "@/app/lib/address";
+import { spreadOverlappingMarkers } from "@/app/lib/markerLayout";
 import {
   getRoleDefinition,
   MEETING_POINT_LEGEND,
@@ -495,6 +496,15 @@ export default function MapPicker({
   enablePrintPrepare = false,
 }: MapPickerProps) {
   const [isMapInteractive, setIsMapInteractive] = useState(false);
+  const positionedMarkers = useMemo(() => {
+    return spreadOverlappingMarkers([
+      ...people.map((person) => ({ ...person, kind: "person" as const })),
+      ...meetingPoints.map((point) => ({
+        ...point,
+        kind: "meetingPoint" as const,
+      })),
+    ]);
+  }, [people, meetingPoints]);
   const heightClass =
     className ?? (large ? "h-[500px] print:h-[9.5in]" : "h-96");
   const showOverlayLegend =
@@ -560,57 +570,62 @@ export default function MapPicker({
           </Marker>
         )}
 
-        {people.map((person) => {
-          const roleDefinition = getRoleDefinition(person.role);
+        {positionedMarkers.map((entry) => {
+          if (entry.kind === "person") {
+            const person = entry;
+            const roleDefinition = getRoleDefinition(person.role);
+
+            return (
+              <Marker
+                key={`person-${person.id}`}
+                position={[person.displayLat, person.displayLng]}
+                icon={getPersonMarkerIcon(person.role, person.name)}
+              >
+                <Popup>
+                  <strong>
+                    {roleDefinition.emoji} {person.name}
+                  </strong>
+                  {person.role && (
+                    <>
+                      <br />
+                      {person.role}
+                    </>
+                  )}
+                  {person.phone && (
+                    <>
+                      <br />
+                      {person.phone}
+                    </>
+                  )}
+                  <br />
+                  {formatCompactAddress(person.address)}
+                </Popup>
+              </Marker>
+            );
+          }
+
+          const point = entry;
 
           return (
             <Marker
-              key={person.id}
-              position={[person.lat, person.lng]}
-              icon={getPersonMarkerIcon(person.role, person.name)}
+              key={`meeting-point-${point.id}`}
+              position={[point.displayLat, point.displayLng]}
+              icon={getMeetingPointMarkerIcon(point.name)}
             >
               <Popup>
-                <strong>
-                  {roleDefinition.emoji} {person.name}
-                </strong>
-                {person.role && (
-                  <>
-                    <br />
-                    {person.role}
-                  </>
-                )}
-                {person.phone && (
-                  <>
-                    <br />
-                    {person.phone}
-                  </>
-                )}
+                <strong>🚩 {point.name}</strong>
                 <br />
-                {formatCompactAddress(person.address)}
+                {formatCompactAddress(point.address)}
+                {point.notes && (
+                  <>
+                    <br />
+                    {point.notes}
+                  </>
+                )}
               </Popup>
             </Marker>
           );
         })}
-
-        {meetingPoints.map((point) => (
-          <Marker
-            key={point.id}
-            position={[point.lat, point.lng]}
-            icon={getMeetingPointMarkerIcon(point.name)}
-          >
-            <Popup>
-              <strong>🚩 {point.name}</strong>
-              <br />
-              {formatCompactAddress(point.address)}
-              {point.notes && (
-                <>
-                  <br />
-                  {point.notes}
-                </>
-              )}
-            </Popup>
-          </Marker>
-        ))}
       </MapContainer>
 
       <MapInteractionShield
