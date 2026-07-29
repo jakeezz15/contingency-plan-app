@@ -1,11 +1,23 @@
+export type HouseholdMember = {
+  name: string;
+  phone: string;
+};
+
 export type Person = {
   id: number;
-  name: string;
+  /** Single map pin label for everyone at this address (e.g. "1"). */
+  label: string;
   address: string;
-  phone: string;
-  role: string;
   lat: number;
   lng: number;
+  /** Names living at this labeled address. */
+  members: HouseholdMember[];
+  /** @deprecated Kept for older saved plans; no longer used in the UI. */
+  role?: string;
+  /** @deprecated Migrated into members[]. */
+  name?: string;
+  /** @deprecated Migrated into members[]. */
+  phone?: string;
 };
 
 export type MeetingPoint = {

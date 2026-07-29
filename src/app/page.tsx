@@ -14,10 +14,9 @@ export default function Home() {
     planNotes,
     createdAt,
     updatedAt,
-    name,
-    role,
-    phone,
     address,
+    label,
+    namesText,
     people,
     selectedLocation,
     pendingGeocode,
@@ -34,35 +33,33 @@ export default function Home() {
     showGeneratedPlan,
     editingPersonId,
     isExportingPdf,
-    openSections,
+    basemap,
     importInputRef,
     generatedPlanRef,
-    displayPlanName,
     canGeneratePlan,
     generatePlanHint,
     setPlanName,
     setPlanNotes,
-    setName,
-    setRole,
-    setPhone,
+    setLabel,
+    setNamesText,
     handlePersonAddressChange,
     setMeetingPointName,
     handleMeetingPointAddressChange,
     setMeetingPointNotes,
     setEditingPersonId,
+    setBasemap,
     switchToPlan,
     createNewPlan,
     deleteActivePlan,
-    scrollToSection,
     generatePlan,
+    closeGeneratedPlan,
     printPlan,
     exportPdf,
     exportPlan,
     importPlan,
-    toggleSection,
     confirmAddress,
     confirmMeetingAddress,
-    addPerson,
+    addHousehold,
     updatePerson,
     removePerson,
     clearAllPeople,
@@ -81,83 +78,77 @@ export default function Home() {
         onCreatePlan={createNewPlan}
         onDeletePlan={deleteActivePlan}
         canDeletePlan={plans.length > 1}
-        onNavigate={scrollToSection}
         onGenerate={generatePlan}
         canGenerate={canGeneratePlan}
-        showOutputNav={showGeneratedPlan}
         formatDate={formatPlanDate}
       />
 
-      <div className="mx-auto max-w-7xl p-4 sm:p-6">
-        <div className="print:hidden">
-          <PlanWorkspace
-            openSections={openSections}
-            toggleSection={toggleSection}
-            planName={planName}
-            planNotes={planNotes}
-            createdAt={createdAt}
-            updatedAt={updatedAt}
-            setPlanName={setPlanName}
-            setPlanNotes={setPlanNotes}
-            exportPlan={exportPlan}
-            importInputRef={importInputRef}
-            importPlan={importPlan}
-            resetActivePlan={resetActivePlan}
-            people={people}
-            meetingPoints={meetingPoints}
-            editingPersonId={editingPersonId}
-            generatePlanHint={generatePlanHint}
-            canGeneratePlan={canGeneratePlan}
-            name={name}
-            role={role}
-            phone={phone}
-            address={address}
-            searchMessage={searchMessage}
-            isSearching={isSearching}
-            pendingGeocode={pendingGeocode}
-            selectedLocation={selectedLocation}
-            setName={setName}
-            setRole={setRole}
-            setPhone={setPhone}
-            handlePersonAddressChange={handlePersonAddressChange}
-            confirmAddress={confirmAddress}
-            addPerson={addPerson}
-            clearAllPeople={clearAllPeople}
-            setEditingPersonId={setEditingPersonId}
-            updatePerson={updatePerson}
-            removePerson={removePerson}
-            meetingPointName={meetingPointName}
-            meetingPointAddress={meetingPointAddress}
-            meetingPointNotes={meetingPointNotes}
-            meetingSearchMessage={meetingSearchMessage}
-            isSearchingMeeting={isSearchingMeeting}
-            pendingMeetingGeocode={pendingMeetingGeocode}
-            selectedMeetingLocation={selectedMeetingLocation}
-            setMeetingPointName={setMeetingPointName}
-            handleMeetingPointAddressChange={handleMeetingPointAddressChange}
-            setMeetingPointNotes={setMeetingPointNotes}
-            confirmMeetingAddress={confirmMeetingAddress}
-            addMeetingPoint={addMeetingPoint}
-            clearAllMeetingPoints={clearAllMeetingPoints}
-            removeMeetingPoint={removeMeetingPoint}
-          />
-        </div>
-
-        {showGeneratedPlan && (
-          <GeneratedPlanSection
-            ref={generatedPlanRef}
-            displayPlanName={displayPlanName}
-            planNotes={planNotes}
-            createdAt={createdAt}
-            updatedAt={updatedAt}
-            people={people}
-            meetingPoints={meetingPoints}
-            isExportingPdf={isExportingPdf}
-            onExportPdf={exportPdf}
-            onPrintPlan={printPlan}
-          />
-        )}
+      <div className="print:hidden">
+        <PlanWorkspace
+          planName={planName}
+          planNotes={planNotes}
+          createdAt={createdAt}
+          updatedAt={updatedAt}
+          setPlanName={setPlanName}
+          setPlanNotes={setPlanNotes}
+          exportPlan={exportPlan}
+          importInputRef={importInputRef}
+          importPlan={importPlan}
+          resetActivePlan={resetActivePlan}
+          people={people}
+          meetingPoints={meetingPoints}
+          editingPersonId={editingPersonId}
+          generatePlanHint={generatePlanHint}
+          canGeneratePlan={canGeneratePlan}
+          label={label}
+          namesText={namesText}
+          address={address}
+          searchMessage={searchMessage}
+          isSearching={isSearching}
+          pendingGeocode={pendingGeocode}
+          selectedLocation={selectedLocation}
+          setLabel={setLabel}
+          setNamesText={setNamesText}
+          handlePersonAddressChange={handlePersonAddressChange}
+          confirmAddress={confirmAddress}
+          addHousehold={addHousehold}
+          clearAllPeople={clearAllPeople}
+          setEditingPersonId={setEditingPersonId}
+          updatePerson={updatePerson}
+          removePerson={removePerson}
+          meetingPointName={meetingPointName}
+          meetingPointAddress={meetingPointAddress}
+          meetingPointNotes={meetingPointNotes}
+          meetingSearchMessage={meetingSearchMessage}
+          isSearchingMeeting={isSearchingMeeting}
+          pendingMeetingGeocode={pendingMeetingGeocode}
+          selectedMeetingLocation={selectedMeetingLocation}
+          setMeetingPointName={setMeetingPointName}
+          handleMeetingPointAddressChange={handleMeetingPointAddressChange}
+          setMeetingPointNotes={setMeetingPointNotes}
+          confirmMeetingAddress={confirmMeetingAddress}
+          addMeetingPoint={addMeetingPoint}
+          clearAllMeetingPoints={clearAllMeetingPoints}
+          removeMeetingPoint={removeMeetingPoint}
+          basemap={basemap}
+          setBasemap={setBasemap}
+        />
       </div>
+
+      {showGeneratedPlan && (
+        <GeneratedPlanSection
+          ref={generatedPlanRef}
+          planName={planName}
+          people={people}
+          meetingPoints={meetingPoints}
+          isExportingPdf={isExportingPdf}
+          onClose={closeGeneratedPlan}
+          onExportPdf={exportPdf}
+          onPrintPlan={printPlan}
+          basemap={basemap}
+          onBasemapChange={setBasemap}
+        />
+      )}
     </main>
   );
 }

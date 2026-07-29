@@ -1,47 +1,74 @@
-export type RoleDefinition = {
+export type MarkerStyle = {
   label: string;
-  emoji: string;
   color: string;
 };
 
-export const ROLE_DEFINITIONS: RoleDefinition[] = [
-  { label: "Team Lead", emoji: "★", color: "#f59e0b" },
-  { label: "Backup Contact", emoji: "📞", color: "#8b5cf6" },
-  { label: "Driver", emoji: "🚗", color: "#2563eb" },
-  { label: "Medical", emoji: "🏥", color: "#dc2626" },
-  { label: "Elderly", emoji: "🧓", color: "#ea580c" },
-  { label: "Family", emoji: "👨‍👩‍👧", color: "#16a34a" },
-  { label: "Staff", emoji: "💼", color: "#475569" },
-  { label: "Other", emoji: "👤", color: "#6b7280" },
-];
-
-export const DEFAULT_ROLE: RoleDefinition = {
-  label: "",
-  emoji: "📍",
-  color: "#3b82f6",
+export const PERSON_MARKER: MarkerStyle = {
+  label: "Person",
+  color: "#2563eb",
 };
 
-export const MEETING_POINT_LEGEND = {
+export const MEETING_POINT_LEGEND: MarkerStyle = {
   label: "Meeting Point",
-  emoji: "🚩",
   color: "#dc2626",
 };
 
-export const ROLE_OPTIONS = ROLE_DEFINITIONS.map((role) => role.label);
-
-const ROLE_ALIASES: Record<string, string> = {
-  "Medical Team": "Medical",
-};
-
-export function getRoleDefinition(role: string): RoleDefinition {
-  const normalizedRole = ROLE_ALIASES[role] ?? role;
-
-  return (
-    ROLE_DEFINITIONS.find((definition) => definition.label === normalizedRole) ??
-    DEFAULT_ROLE
-  );
+/** Suggest the next unused numeric label for a new person. */
+export function suggestNextPersonLabel(existingLabels: string[]): string {
+  return suggestNextPersonLabels(existingLabels, 1)[0];
 }
 
-export function formatRoleOption(definition: RoleDefinition) {
-  return `${definition.emoji} ${definition.label}`;
+/** Suggest several unused numeric labels in sequence. */
+export function suggestNextPersonLabels(
+  existingLabels: string[],
+  count: number
+): string[] {
+  const used = new Set(
+    existingLabels.map((label) => label.trim()).filter(Boolean)
+  );
+  const suggestions: string[] = [];
+  let next = 1;
+
+  while (suggestions.length < count) {
+    const candidate = String(next);
+    if (!used.has(candidate)) {
+      suggestions.push(candidate);
+      used.add(candidate);
+    }
+    next += 1;
+  }
+
+  return suggestions;
+}
+
+/** Parse names from a multi-line / comma-separated text field. */
+export function parseNamesText(text: string): string[] {
+  return text
+    .split(/[\n,;]+/)
+    .map((name) => name.trim())
+    .filter(Boolean);
+}
+
+/**
+ * Legend line for a pin, e.g. "1 - Jake Family: Jake, Janine"
+ * or "1 - Jake" when there is only one name.
+ */
+export function formatPersonLegendEntry(person: {
+  label: string;
+  members: { name: string }[];
+}): string {
+  const label = person.label.trim() || "•";
+  const names = person.members
+    .map((member) => member.name.trim())
+    .filter(Boolean);
+
+  if (names.length === 0) {
+    return `${label} — (no names)`;
+  }
+
+  if (names.length === 1) {
+    return `${label} - ${names[0]}`;
+  }
+
+  return `${label} - ${names[0]} Family: ${names.join(", ")}`;
 }

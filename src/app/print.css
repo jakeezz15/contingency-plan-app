@@ -4,18 +4,99 @@
     margin: 12mm;
   }
 
+  html,
   body {
     background: white;
     color: black;
+    height: auto;
+    margin: 0;
   }
 
-  #generated-plan table {
-    font-size: 12px;
+  body {
+    display: block;
   }
 
-  #generated-plan tr,
+  main {
+    width: 100%;
+    max-width: none;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: white !important;
+  }
+
+  main > div {
+    width: 100%;
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  #generated-plan,
+  .generated-plan-modal {
+    position: static !important;
+    inset: auto !important;
+    display: block;
+    width: 100%;
+    height: auto !important;
+    max-height: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: transparent !important;
+  }
+
+  .generated-plan-modal-backdrop,
+  .generated-plan-modal-close {
+    display: none !important;
+  }
+
+  .generated-plan-modal-panel {
+    width: 100% !important;
+    max-width: none !important;
+    max-height: none !important;
+    height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    border: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+  }
+
+  .generated-plan-output {
+    overflow: visible !important;
+  }
+
   #generated-plan .role-marker {
     break-inside: avoid;
+  }
+
+  .generated-plan-actions {
+    display: none !important;
+  }
+
+  .map-basemap-switcher {
+    display: none !important;
+  }
+
+  .generated-plan-map-output {
+    width: 100%;
+    max-width: 9.5in;
+    margin: 0 auto;
+    padding: 0 !important;
+    border: none !important;
+    border-radius: 0 !important;
+    overflow: hidden;
+    break-after: page;
+    page-break-after: always;
+  }
+
+  .generated-plan-legend-page {
+    break-before: page;
+    page-break-before: always;
+    max-width: 9.5in;
+    margin: 0 auto;
+    padding: 0.5in !important;
+    border: none !important;
   }
 
   .leaflet-control-container {
@@ -35,13 +116,59 @@
     -webkit-print-color-adjust: exact;
   }
 
+  .role-marker div,
+  .marker-label-text {
+    box-shadow: none !important;
+  }
+
   .map-print-target {
+    width: 100% !important;
     height: 9.5in !important;
     min-height: 9.5in !important;
+    border: none !important;
+    border-radius: 0 !important;
   }
 }
 
 html.preparing-print .map-print-target {
-  height: 9.5in !important;
-  min-height: 9.5in !important;
+  width: 100% !important;
+  height: 14in !important;
+  min-height: 14in !important;
+  border: none !important;
+  border-radius: 0 !important;
+}
+
+html.preparing-print .generated-plan-map-output {
+  max-width: 10in !important;
+  width: 100% !important;
+  padding: 0 !important;
+  border: none !important;
+  border-radius: 0 !important;
+}
+
+html.preparing-print-landscape .map-print-target {
+  height: 9in !important;
+  min-height: 9in !important;
+}
+
+html.preparing-print-landscape .generated-plan-map-output {
+  max-width: 15.5in !important;
+  width: 100% !important;
+}
+
+html.preparing-print .generated-plan-actions,
+html.preparing-print .map-interaction-ui,
+html.preparing-print .map-basemap-switcher,
+html.preparing-print .leaflet-control-container {
+  display: none !important;
+}
+
+html.preparing-print .role-marker div,
+html.preparing-print .marker-label-text {
+  box-shadow: none !important;
+}
+
+html.preparing-print .generated-plan-legend-page {
+  padding: 0.75in !important;
+  border: none !important;
 }

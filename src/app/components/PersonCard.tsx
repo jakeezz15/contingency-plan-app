@@ -4,11 +4,7 @@ import { useEffect, useState } from "react";
 import { formatCompactAddress } from "@/app/lib/address";
 import { geocodeAddress } from "@/app/lib/geocode";
 import MeetingPointDistances from "@/app/components/MeetingPointDistances";
-import {
-  formatRoleOption,
-  getRoleDefinition,
-  ROLE_DEFINITIONS,
-} from "@/app/lib/roles";
+import { parseNamesText, PERSON_MARKER } from "@/app/lib/roles";
 import type { GeocodeResult, MeetingPoint, Person } from "@/app/types";
 
 type PersonCardProps = {
@@ -36,36 +32,48 @@ export default function PersonCard({
     );
   }
 
-  const roleDefinition = getRoleDefinition(person.role);
+  const names = person.members.map((member) => member.name).filter(Boolean);
 
   return (
-    <div className="rounded-lg border border-gray-200 p-4">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2">
+    <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2.5">
             <span
-              className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 border-white text-sm shadow-sm"
-              style={{ backgroundColor: roleDefinition.color }}
+              className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white"
+              style={{ backgroundColor: PERSON_MARKER.color }}
               aria-hidden="true"
             >
-              {roleDefinition.emoji}
+              {person.label || "•"}
             </span>
-            <p className="font-semibold text-gray-900">{person.name}</p>
+            <div className="min-w-0">
+              <p className="text-xs font-semibold text-gray-900">
+                Pin {person.label || "—"}
+              </p>
+              <p className="truncate text-xs text-gray-600">
+                {formatCompactAddress(person.address)}
+              </p>
+            </div>
           </div>
-          {person.role && (
-            <p className="mt-1 text-sm font-medium text-blue-700">
-              {person.role}
-            </p>
+
+          {names.length > 0 ? (
+            <div className="mt-2 flex flex-wrap gap-1">
+              {person.members
+                .filter((member) => member.name.trim())
+                .map((member, index) => (
+                  <span
+                    key={`${person.id}-${index}`}
+                    className="inline-flex max-w-full items-center rounded bg-white px-2 py-0.5 text-[11px] font-medium text-gray-800 ring-1 ring-gray-200"
+                    title={member.phone || undefined}
+                  >
+                    <span className="truncate">{member.name}</span>
+                  </span>
+                ))}
+            </div>
+          ) : (
+            <p className="mt-2 text-xs text-gray-500">No names</p>
           )}
-          {person.phone && (
-            <p className="text-sm text-gray-700">{person.phone}</p>
-          )}
-          <p className="text-sm text-gray-600">
-            {formatCompactAddress(person.address)}
-          </p>
-          <p className="mt-1 text-xs text-gray-400">
-            {person.lat.toFixed(5)}, {person.lng.toFixed(5)}
-          </p>
+
           <MeetingPointDistances
             person={person}
             meetingPoints={meetingPoints}
@@ -73,16 +81,16 @@ export default function PersonCard({
           />
         </div>
 
-        <div className="flex flex-col gap-2">
+        <div className="flex shrink-0 flex-col gap-1.5">
           <button
             onClick={onEdit}
-            className="text-sm font-medium text-blue-600 hover:text-blue-800"
+            className="text-xs font-medium text-blue-600 hover:text-blue-800"
           >
             Edit
           </button>
           <button
             onClick={onRemove}
-            className="text-sm font-medium text-red-600 hover:text-red-800"
+            className="text-xs font-medium text-red-600 hover:text-red-800"
           >
             Remove
           </button>
@@ -99,9 +107,10 @@ type PersonEditFormProps = {
 };
 
 function PersonEditForm({ person, onCancel, onSave }: PersonEditFormProps) {
-  const [name, setName] = useState(person.name);
-  const [role, setRole] = useState(person.role);
-  const [phone, setPhone] = useState(person.phone);
+  const [label, setLabel] = useState(person.label);
+  const [namesText, setNamesText] = useState(
+    person.members.map((member) => member.name).filter(Boolean).join("\n")
+  );
   const [address, setAddress] = useState(person.address);
   const [pendingGeocode, setPendingGeocode] = useState<GeocodeResult | null>(
     null
@@ -150,10 +159,34 @@ function PersonEditForm({ person, onCancel, onSave }: PersonEditFormProps) {
   }
 
   function handleSave() {
-    if (!name.trim() || !address.trim()) {
-      alert("Please enter both name and address.");
+    if (!address.trim()) {
+      alert("Please enter an address.");
       return;
     }
+
+    if (!label.trim()) {
+      alert("Please enter a map label (for example a number).");
+      return;
+    }
+
+    const names = parseNamesText(namesText);
+
+    if (names.length === 0) {
+      alert("Please enter at least one name (one per line).");
+      return;
+    }
+
+    const previousByName = new Map(
+      person.members.map((member) => [
+        member.name.trim().toLowerCase(),
+        member.phone,
+      ])
+    );
+
+    const filledMembers = names.map((name) => ({
+      name,
+      phone: previousByName.get(name.toLowerCase()) ?? "",
+    }));
 
     const addressChanged =
       address.trim().toLowerCase() !== person.address.trim().toLowerCase();
@@ -165,9 +198,8 @@ function PersonEditForm({ person, onCancel, onSave }: PersonEditFormProps) {
 
     onSave({
       ...person,
-      name: name.trim(),
-      role: role.trim(),
-      phone: phone.trim(),
+      label: label.trim(),
+      members: filledMembers,
       address: addressChanged
         ? confirmedLocation!.compactAddress
         : person.address,
@@ -177,9 +209,9 @@ function PersonEditForm({ person, onCancel, onSave }: PersonEditFormProps) {
   }
 
   return (
-    <div className="rounded-lg border border-blue-200 bg-blue-50/40 p-4">
-      <div className="mb-3 flex items-center justify-between">
-        <p className="font-semibold text-gray-900">Editing person</p>
+    <div className="rounded-xl border border-blue-200 bg-blue-50/50 p-4">
+      <div className="mb-4 flex items-center justify-between">
+        <p className="font-semibold text-gray-900">Edit pin</p>
         <button
           onClick={onCancel}
           className="text-sm font-medium text-gray-600 hover:text-gray-800"
@@ -188,80 +220,93 @@ function PersonEditForm({ person, onCancel, onSave }: PersonEditFormProps) {
         </button>
       </div>
 
-      <div className="space-y-3">
-        <input
-          className="w-full rounded-lg border border-gray-300 p-2 text-gray-900"
-          type="text"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="Name"
-        />
-
-        <select
-          className="w-full rounded-lg border border-gray-300 p-2 text-gray-900"
-          value={role}
-          onChange={(e) => setRole(e.target.value)}
-        >
-          <option value="">Select a role (optional)</option>
-          {ROLE_DEFINITIONS.map((definition) => (
-            <option key={definition.label} value={definition.label}>
-              {formatRoleOption(definition)}
-            </option>
-          ))}
-        </select>
-
-        <input
-          className="w-full rounded-lg border border-gray-300 p-2 text-gray-900"
-          type="tel"
-          value={phone}
-          onChange={(e) => setPhone(e.target.value)}
-          placeholder="Phone"
-        />
-
-        <input
-          className="w-full rounded-lg border border-gray-300 p-2 text-gray-900"
-          type="text"
-          value={address}
-          onChange={(e) => {
-            setAddress(e.target.value);
-            setConfirmedLocation(null);
-            setPendingGeocode(null);
-            setSearchMessage("");
-          }}
-          placeholder="Address"
-        />
-
-        {searchMessage && (
-          <div className="rounded-lg bg-white p-3 text-sm text-gray-700">
-            {isSearching ? "🔎 " : "📍 "}
-            {searchMessage}
+      <div className="space-y-4">
+        <div className="flex flex-col gap-3 sm:flex-row">
+          <div className="sm:w-24">
+            <label className="mb-1 block text-xs font-medium text-gray-600">
+              Label
+            </label>
+            <input
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-center font-semibold text-gray-900"
+              type="text"
+              value={label}
+              onChange={(e) => setLabel(e.target.value)}
+              placeholder="1"
+              maxLength={4}
+            />
           </div>
+          <div className="min-w-0 flex-1">
+            <label className="mb-1 block text-xs font-medium text-gray-600">
+              Address
+            </label>
+            <input
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900"
+              type="text"
+              value={address}
+              onChange={(e) => {
+                setAddress(e.target.value);
+                setConfirmedLocation(null);
+                setPendingGeocode(null);
+                setSearchMessage("");
+              }}
+              placeholder="Address"
+            />
+          </div>
+        </div>
+
+        {isSearching && (
+          <p className="text-xs text-gray-500">Searching address…</p>
+        )}
+
+        {searchMessage && !pendingGeocode && !confirmedLocation && (
+          <p className="text-xs text-amber-700">{searchMessage}</p>
         )}
 
         {pendingGeocode && !confirmedLocation && (
-          <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-            <p className="font-medium">Did you mean this address?</p>
-            <p className="mt-1">{pendingGeocode.compactAddress}</p>
+          <div className="flex flex-col gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
+              <p className="text-xs font-semibold text-amber-900">
+                Confirm address
+              </p>
+              <p className="text-sm text-amber-900">
+                {pendingGeocode.compactAddress}
+              </p>
+            </div>
             <button
               onClick={confirmAddress}
-              className="mt-3 rounded-lg bg-amber-600 px-3 py-2 font-semibold text-white hover:bg-amber-700"
+              className="shrink-0 rounded-lg bg-amber-600 px-3 py-2 text-sm font-semibold text-white hover:bg-amber-700"
             >
-              Use This Address
+              Use this
             </button>
           </div>
         )}
 
         {confirmedLocation && (
-          <div className="rounded-lg bg-green-50 p-3 text-sm text-green-700">
-            Updated address confirmed.
-          </div>
+          <p className="text-sm font-medium text-green-700">
+            ✓ Updated address ready
+          </p>
         )}
+
+        <div>
+          <label className="mb-1 block text-xs font-medium text-gray-600">
+            Names
+          </label>
+          <textarea
+            className="min-h-24 w-full resize-y rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900"
+            placeholder={"John\nJohnny\nJane"}
+            value={namesText}
+            onChange={(e) => setNamesText(e.target.value)}
+          />
+          <p className="mt-1.5 text-xs text-gray-500">
+            One name per line (commas also work).
+          </p>
+        </div>
 
         <button
           onClick={handleSave}
-          className="w-full rounded-lg bg-blue-600 px-4 py-2 font-semibold text-white hover:bg-blue-700"
+          className="w-full rounded-lg bg-blue-600 px-4 py-2.5 font-semibold text-white hover:bg-blue-700"
         >
-          Save Changes
+          Save changes
         </button>
       </div>
     </div>

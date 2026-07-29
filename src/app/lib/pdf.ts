@@ -4,86 +4,89 @@ import {
   TABLOID_WIDTH_MM,
 } from "./print";
 
-export async function exportElementToPdf(
-  element: HTMLElement,
-  fileName: string
+export type PdfOrientation = "portrait" | "landscape";
+
+/** Capture scale for sharp tabloid print (~200–300 DPI feel). */
+function getHdCaptureScale() {
+  if (typeof window === "undefined") return 3;
+  return Math.min(4, Math.max(3, Math.ceil(window.devicePixelRatio || 2) + 1));
+}
+
+function drawCanvasOnPdfPage(
+  pdf: InstanceType<typeof import("jspdf").default>,
+  canvas: HTMLCanvasElement
 ) {
-  const [{ default: html2canvas }, { default: jsPDF }] = await Promise.all([
-    import("html2canvas-pro"),
-    import("jspdf"),
-  ]);
-
-  const canvas = await html2canvas(element, {
-    scale: 2,
-    useCORS: true,
-    backgroundColor: "#ffffff",
-    logging: false,
-  });
-
-  const pdf = new jsPDF({
-    orientation: "portrait",
-    unit: "mm",
-    format: [TABLOID_WIDTH_MM, TABLOID_HEIGHT_MM],
-  });
-
   const pageWidthMm = pdf.internal.pageSize.getWidth();
   const pageHeightMm = pdf.internal.pageSize.getHeight();
   const marginMm = PRINT_MARGIN_MM;
   const contentWidthMm = pageWidthMm - marginMm * 2;
   const contentHeightMm = pageHeightMm - marginMm * 2;
 
-  // Pixels per mm at the rendered canvas resolution.
-  const pxPerMm = canvas.width / contentWidthMm;
-  const pageHeightPx = Math.floor(contentHeightMm * pxPerMm);
+  const imageRatio = canvas.width / canvas.height;
+  const pageRatio = contentWidthMm / contentHeightMm;
 
-  let renderedHeightPx = 0;
-  let pageIndex = 0;
+  let drawWidthMm: number;
+  let drawHeightMm: number;
 
-  while (renderedHeightPx < canvas.height) {
-    const sliceHeightPx = Math.min(
-      pageHeightPx,
-      canvas.height - renderedHeightPx
-    );
+  if (imageRatio > pageRatio) {
+    drawWidthMm = contentWidthMm;
+    drawHeightMm = contentWidthMm / imageRatio;
+  } else {
+    drawHeightMm = contentHeightMm;
+    drawWidthMm = contentHeightMm * imageRatio;
+  }
 
-    const pageCanvas = document.createElement("canvas");
-    pageCanvas.width = canvas.width;
-    pageCanvas.height = sliceHeightPx;
+  const offsetXMm = marginMm + (contentWidthMm - drawWidthMm) / 2;
+  const offsetYMm = marginMm + (contentHeightMm - drawHeightMm) / 2;
+  const imageData = canvas.toDataURL("image/jpeg", 0.95);
 
-    const context = pageCanvas.getContext("2d");
-    if (!context) break;
+  pdf.addImage(
+    imageData,
+    "JPEG",
+    offsetXMm,
+    offsetYMm,
+    drawWidthMm,
+    drawHeightMm,
+    undefined,
+    "MEDIUM"
+  );
+}
 
-    context.fillStyle = "#ffffff";
-    context.fillRect(0, 0, pageCanvas.width, pageCanvas.height);
-    context.drawImage(
-      canvas,
-      0,
-      renderedHeightPx,
-      canvas.width,
-      sliceHeightPx,
-      0,
-      0,
-      canvas.width,
-      sliceHeightPx
-    );
+export async function exportElementToPdf(
+  element: HTMLElement,
+  fileName: string,
+  orientation: PdfOrientation = "portrait"
+) {
+  const [{ default: html2canvas }, { default: jsPDF }] = await Promise.all([
+    import("html2canvas-pro"),
+    import("jspdf"),
+  ]);
 
-    const sliceImage = pageCanvas.toDataURL("image/png");
-    const sliceHeightMm = sliceHeightPx / pxPerMm;
+  const pageNodes = Array.from(
+    element.querySelectorAll<HTMLElement>("[data-pdf-page]")
+  );
+  const targets = pageNodes.length > 0 ? pageNodes : [element];
 
-    if (pageIndex > 0) {
-      pdf.addPage([TABLOID_WIDTH_MM, TABLOID_HEIGHT_MM]);
+  const pdf = new jsPDF({
+    orientation,
+    unit: "mm",
+    format: [TABLOID_WIDTH_MM, TABLOID_HEIGHT_MM],
+  });
+
+  for (let index = 0; index < targets.length; index += 1) {
+    const canvas = await html2canvas(targets[index], {
+      scale: getHdCaptureScale(),
+      useCORS: true,
+      backgroundColor: "#ffffff",
+      logging: false,
+      imageTimeout: 15000,
+    });
+
+    if (index > 0) {
+      pdf.addPage([TABLOID_WIDTH_MM, TABLOID_HEIGHT_MM], orientation);
     }
 
-    pdf.addImage(
-      sliceImage,
-      "PNG",
-      marginMm,
-      marginMm,
-      contentWidthMm,
-      sliceHeightMm
-    );
-
-    renderedHeightPx += sliceHeightPx;
-    pageIndex += 1;
+    drawCanvasOnPdfPage(pdf, canvas);
   }
 
   pdf.save(fileName);
