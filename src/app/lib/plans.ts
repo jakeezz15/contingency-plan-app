@@ -1,10 +1,47 @@
-import type { MeetingPoint, Person, SavedPlan } from "@/app/types";
+import type { HouseholdMember, MeetingPoint, Person, SavedPlan } from "@/app/types";
 
 export const LEGACY_STORAGE_KEY = "contingency-plan-people";
 export const PLANS_STORAGE_KEY = "contingency-plan-plans";
 export const ACTIVE_PLAN_STORAGE_KEY = "contingency-plan-active-id";
 
-export type WorkspaceSection = "plan-details" | "people" | "meeting-points";
+function normalizeMembers(person: Person): HouseholdMember[] {
+  if (Array.isArray(person.members) && person.members.length > 0) {
+    return person.members.map((member) => ({
+      name: member.name?.trim() ?? "",
+      phone: member.phone?.trim() ?? "",
+    }));
+  }
+
+  const legacyName = person.name?.trim() ?? "";
+  if (legacyName) {
+    return [{ name: legacyName, phone: person.phone?.trim() ?? "" }];
+  }
+
+  return [{ name: "", phone: "" }];
+}
+
+function normalizePerson(person: Person, index: number): Person {
+  const label =
+    person.label?.trim() ||
+    (typeof person.role === "string" && /^\d+$/.test(person.role.trim())
+      ? person.role.trim()
+      : String(index + 1));
+
+  const members = normalizeMembers(person).filter((member) => member.name);
+
+  return {
+    id: person.id,
+    label,
+    address: person.address ?? "",
+    lat: person.lat,
+    lng: person.lng,
+    members:
+      members.length > 0
+        ? members
+        : [{ name: "Unnamed", phone: "" }],
+    role: person.role ?? "",
+  };
+}
 
 export function formatPlanDate(isoDate: string) {
   return new Date(isoDate).toLocaleDateString("en-US", {
@@ -44,11 +81,9 @@ export function normalizePlanData(parsed: unknown): Omit<SavedPlan, "id"> {
   if (Array.isArray(parsed)) {
     return {
       ...createEmptyPlanData(),
-      people: parsed.map((person: Person) => ({
-        ...person,
-        phone: person.phone ?? "",
-        role: person.role ?? "",
-      })),
+      people: parsed.map((person: Person, index: number) =>
+        normalizePerson(person, index)
+      ),
     };
   }
 
@@ -59,11 +94,9 @@ export function normalizePlanData(parsed: unknown): Omit<SavedPlan, "id"> {
     planNotes: data.planNotes ?? "",
     createdAt: data.createdAt ?? new Date().toISOString(),
     updatedAt: data.updatedAt ?? new Date().toISOString(),
-    people: (data.people ?? []).map((person: Person) => ({
-      ...person,
-      phone: person.phone ?? "",
-      role: person.role ?? "",
-    })),
+    people: (data.people ?? []).map((person: Person, index: number) =>
+      normalizePerson(person, index)
+    ),
     meetingPoints: (data.meetingPoints ?? []).map((point: MeetingPoint) => ({
       ...point,
       notes: point.notes ?? "",

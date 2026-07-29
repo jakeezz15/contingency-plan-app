@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import { geocodeAddress } from "@/app/lib/geocode";
 import { exportElementToPdf } from "@/app/lib/pdf";
 import { prepareMapForPrint } from "@/app/lib/mapPrint";
+import { DEFAULT_BASEMAP, type BasemapId } from "@/app/lib/basemaps";
+import { parseNamesText, suggestNextPersonLabel } from "@/app/lib/roles";
 import {
   ACTIVE_PLAN_STORAGE_KEY,
   createEmptyPlan,
@@ -13,7 +15,6 @@ import {
   parsePlanJson,
   persistPlans,
   PLANS_STORAGE_KEY,
-  type WorkspaceSection,
 } from "@/app/lib/plans";
 import type {
   GeocodeResult,
@@ -32,10 +33,9 @@ export function useContingencyPlan() {
   const [createdAt, setCreatedAt] = useState("");
   const [updatedAt, setUpdatedAt] = useState("");
 
-  const [name, setName] = useState("");
   const [address, setAddress] = useState("");
-  const [phone, setPhone] = useState("");
-  const [role, setRole] = useState("");
+  const [label, setLabel] = useState("1");
+  const [namesText, setNamesText] = useState("");
   const [people, setPeople] = useState<Person[]>([]);
   const [selectedLocation, setSelectedLocation] =
     useState<SelectedLocation>(null);
@@ -60,17 +60,11 @@ export function useContingencyPlan() {
   const [editingPersonId, setEditingPersonId] = useState<number | null>(null);
   const [hasLoadedSavedData, setHasLoadedSavedData] = useState(false);
   const [isExportingPdf, setIsExportingPdf] = useState(false);
-  const [openSections, setOpenSections] = useState<
-    Record<WorkspaceSection, boolean>
-  >({
-    "plan-details": true,
-    people: true,
-    "meeting-points": true,
-  });
+  const [basemap, setBasemap] = useState<BasemapId>(DEFAULT_BASEMAP);
 
   const skipNextSave = useRef(true);
   const importInputRef = useRef<HTMLInputElement>(null);
-  const generatedPlanRef = useRef<HTMLElement>(null);
+  const generatedPlanRef = useRef<HTMLDivElement>(null);
 
   function loadPlanIntoEditor(plan: SavedPlan) {
     setPlanName(plan.planName);
@@ -79,13 +73,14 @@ export function useContingencyPlan() {
     setUpdatedAt(plan.updatedAt);
     setPeople(plan.people);
     setMeetingPoints(plan.meetingPoints);
+    setLabel(suggestNextPersonLabel(plan.people.map((person) => person.label)));
+    setNamesText("");
   }
 
-  function resetPersonForm() {
-    setName("");
+  function resetPersonForm(currentPeople: Person[] = people) {
     setAddress("");
-    setPhone("");
-    setRole("");
+    setLabel(suggestNextPersonLabel(currentPeople.map((person) => person.label)));
+    setNamesText("");
     setSelectedLocation(null);
     setPendingGeocode(null);
     setSearchMessage("");
@@ -280,29 +275,41 @@ export function useContingencyPlan() {
     return () => clearTimeout(delaySearch);
   }, [meetingPointAddress]);
 
-  function addPerson() {
-    if (!name.trim() || !address.trim()) {
-      alert("Please enter both name and address.");
+  function addHousehold() {
+    if (!address.trim()) {
+      alert("Please enter an address.");
+      return;
+    }
+
+    if (!label.trim()) {
+      alert("Please enter a map label (for example a number).");
       return;
     }
 
     if (!selectedLocation) {
-      alert("Please confirm the address on the map before adding this person.");
+      alert("Please confirm the address on the map before adding.");
+      return;
+    }
+
+    const names = parseNamesText(namesText);
+
+    if (names.length === 0) {
+      alert("Please enter at least one name (one per line).");
       return;
     }
 
     const newPerson: Person = {
       id: Date.now(),
-      name: name.trim(),
+      label: label.trim(),
       address: pendingGeocode?.compactAddress ?? address.trim(),
-      phone: phone.trim(),
-      role: role.trim(),
       lat: selectedLocation.lat,
       lng: selectedLocation.lng,
+      members: names.map((name) => ({ name, phone: "" })),
     };
 
-    setPeople([...people, newPerson]);
-    resetPersonForm();
+    const nextPeople = [...people, newPerson];
+    setPeople(nextPeople);
+    resetPersonForm(nextPeople);
     invalidateGeneratedPlan();
   }
 
@@ -364,6 +371,7 @@ export function useContingencyPlan() {
     if (!confirmClear) return;
 
     setPeople([]);
+    resetPersonForm([]);
     invalidateGeneratedPlan();
   }
 
@@ -479,15 +487,6 @@ export function useContingencyPlan() {
     }
 
     setShowGeneratedPlan(true);
-
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        document.getElementById("generated-plan")?.scrollIntoView({
-          behavior: "smooth",
-          block: "start",
-        });
-      });
-    });
   }
 
   async function prepareForPrintOutput() {
@@ -511,22 +510,36 @@ export function useContingencyPlan() {
     }
   }
 
-  async function exportPdf() {
+  async function exportPdf(orientation: "portrait" | "landscape" = "portrait") {
     if (!generatedPlanRef.current) return;
 
     try {
       setIsExportingPdf(true);
-      await prepareForPrintOutput();
+      document.documentElement.classList.add("preparing-print");
+      if (orientation === "landscape") {
+        document.documentElement.classList.add("preparing-print-landscape");
+      }
+      await new Promise<void>((resolve) => {
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => resolve());
+        });
+      });
+      await prepareMapForPrint();
+
       const safeName = planName.trim() || "contingency-plan";
       await exportElementToPdf(
         generatedPlanRef.current,
-        `${safeName.toLowerCase().replace(/\s+/g, "-")}.pdf`
+        `${safeName.toLowerCase().replace(/\s+/g, "-")}.pdf`,
+        orientation
       );
     } catch (error) {
       console.error(error);
       alert("Could not export PDF. Please try again.");
     } finally {
-      document.documentElement.classList.remove("preparing-print");
+      document.documentElement.classList.remove(
+        "preparing-print",
+        "preparing-print-landscape"
+      );
       setIsExportingPdf(false);
     }
   }
@@ -584,27 +597,6 @@ export function useContingencyPlan() {
     event.target.value = "";
   }
 
-  function toggleSection(section: WorkspaceSection) {
-    setOpenSections((prev) => ({ ...prev, [section]: !prev[section] }));
-  }
-
-  function scrollToSection(sectionId: string) {
-    if (
-      sectionId === "plan-details" ||
-      sectionId === "people" ||
-      sectionId === "meeting-points"
-    ) {
-      setOpenSections((prev) => ({ ...prev, [sectionId]: true }));
-    }
-
-    requestAnimationFrame(() => {
-      document.getElementById(sectionId)?.scrollIntoView({
-        behavior: "smooth",
-        block: "start",
-      });
-    });
-  }
-
   function handlePersonAddressChange(value: string) {
     setAddress(value);
     setSelectedLocation(null);
@@ -637,10 +629,9 @@ export function useContingencyPlan() {
     planNotes,
     createdAt,
     updatedAt,
-    name,
-    role,
-    phone,
     address,
+    label,
+    namesText,
     people,
     selectedLocation,
     pendingGeocode,
@@ -657,7 +648,7 @@ export function useContingencyPlan() {
     showGeneratedPlan,
     editingPersonId,
     isExportingPdf,
-    openSections,
+    basemap,
     importInputRef,
     generatedPlanRef,
     displayPlanName,
@@ -671,27 +662,26 @@ export function useContingencyPlan() {
       setPlanNotes(value);
       invalidateGeneratedPlan();
     },
-    setName,
-    setRole,
-    setPhone,
     handlePersonAddressChange,
+    setLabel,
+    setNamesText,
     setMeetingPointName,
     handleMeetingPointAddressChange,
     setMeetingPointNotes,
     setEditingPersonId,
+    setBasemap,
     switchToPlan,
     createNewPlan,
     deleteActivePlan,
-    scrollToSection,
     generatePlan,
+    closeGeneratedPlan: () => setShowGeneratedPlan(false),
     printPlan,
     exportPdf,
     exportPlan,
     importPlan,
-    toggleSection,
     confirmAddress,
     confirmMeetingAddress,
-    addPerson,
+    addHousehold,
     updatePerson,
     removePerson,
     clearAllPeople,

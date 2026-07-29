@@ -12,9 +12,18 @@ import {
 
 import { formatCompactAddress } from "@/app/lib/address";
 import {
-  getRoleDefinition,
+  BASEMAP_OPTIONS,
+  DEFAULT_BASEMAP,
+  type BasemapId,
+} from "@/app/lib/basemaps";
+import {
+  groupPeopleByLocation,
+  spreadOverlappingMarkers,
+} from "@/app/lib/markerLayout";
+import {
   MEETING_POINT_LEGEND,
-  type RoleDefinition,
+  PERSON_MARKER,
+  type MarkerStyle,
 } from "@/app/lib/roles";
 import type { MeetingPoint, Person, SelectedLocation } from "@/app/types";
 import { PREPARE_MAP_PRINT_EVENT } from "@/app/lib/mapPrint";
@@ -33,7 +42,12 @@ type MapPickerProps = {
   legendPlacement?: LegendPlacement;
   mapKey?: string;
   className?: string;
+  /** Edge-to-edge map with no rounded frame (workspace layout). */
+  flush?: boolean;
   enablePrintPrepare?: boolean;
+  basemap?: BasemapId;
+  onBasemapChange?: (basemap: BasemapId) => void;
+  showBasemapSwitcher?: boolean;
 };
 
 delete (L.Icon.Default.prototype as unknown as { _getIconUrl?: unknown })
@@ -46,11 +60,9 @@ L.Icon.Default.mergeOptions({
   shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
 });
 
-const roleIconCache = new Map<string, L.DivIcon>();
-const labeledMarkerIconCache = new Map<string, L.DivIcon>();
+const markerIconCache = new Map<string, L.DivIcon>();
 
 const MARKER_PIN_SIZE = 32;
-const MARKER_LABEL_MAX_WIDTH = 76;
 
 function escapeHtml(text: string) {
   return text
@@ -61,55 +73,47 @@ function escapeHtml(text: string) {
     .replace(/'/g, "&#39;");
 }
 
-function createMarkerIcon(definition: RoleDefinition, label?: string) {
-  const cacheKey = label
-    ? `${definition.label}:${definition.emoji}:${definition.color}:${label}`
-    : `${definition.label}:${definition.emoji}:${definition.color}`;
-  const cache = label ? labeledMarkerIconCache : roleIconCache;
+function pinFontSize(pinText: string) {
+  if (pinText.length <= 2) return 14;
+  if (pinText.length <= 3) return 12;
+  return 10;
+}
 
-  if (cache.has(cacheKey)) {
-    return cache.get(cacheKey)!;
+function createMarkerIcon(color: string, pinText: string) {
+  const displayText = pinText.trim() || "•";
+  const cacheKey = `${color}:${displayText}`;
+
+  if (markerIconCache.has(cacheKey)) {
+    return markerIconCache.get(cacheKey)!;
   }
 
   const pinHtml =
-    `<div style="width:${MARKER_PIN_SIZE}px;height:${MARKER_PIN_SIZE}px;border-radius:50%;background:${definition.color};` +
+    `<div style="width:${MARKER_PIN_SIZE}px;height:${MARKER_PIN_SIZE}px;border-radius:50%;background:${color};` +
     "border:3px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.35);" +
-    'display:flex;align-items:center;justify-content:center;font-size:15px;line-height:1;">' +
-    `${definition.emoji}</div>`;
-
-  const labelHtml = label
-    ? `<div class="marker-label-text" style="margin-top:2px;max-width:${MARKER_LABEL_MAX_WIDTH}px;padding:1px 5px;` +
-      "border-radius:4px;border:1px solid rgba(0,0,0,0.12);background:rgba(255,255,255,0.96);" +
-      "box-shadow:0 1px 3px rgba(0,0,0,0.2);font-size:9px;font-weight:600;line-height:1.2;" +
-      'color:#1f2937;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' +
-      `${escapeHtml(label)}</div>`
-    : "";
-
-  const iconWidth = label ? MARKER_LABEL_MAX_WIDTH : MARKER_PIN_SIZE;
-  const iconHeight = label ? MARKER_PIN_SIZE + 18 : MARKER_PIN_SIZE;
+    `display:flex;align-items:center;justify-content:center;font-size:${pinFontSize(displayText)}px;` +
+    'font-weight:700;line-height:1;color:#ffffff;font-family:Arial,Helvetica,sans-serif;">' +
+    `${escapeHtml(displayText)}</div>`;
 
   const icon = L.divIcon({
-    className: label ? "role-marker role-marker--labeled" : "role-marker",
-    html:
-      `<div style="display:flex;flex-direction:column;align-items:center;width:${iconWidth}px;">` +
-      `${pinHtml}${labelHtml}</div>`,
-    iconSize: [iconWidth, iconHeight],
-    iconAnchor: [iconWidth / 2, MARKER_PIN_SIZE / 2],
+    className: "role-marker",
+    html: `<div style="display:flex;align-items:center;justify-content:center;width:${MARKER_PIN_SIZE}px;">${pinHtml}</div>`,
+    iconSize: [MARKER_PIN_SIZE, MARKER_PIN_SIZE],
+    iconAnchor: [MARKER_PIN_SIZE / 2, MARKER_PIN_SIZE / 2],
     popupAnchor: [0, -MARKER_PIN_SIZE / 2],
   });
 
-  cache.set(cacheKey, icon);
+  markerIconCache.set(cacheKey, icon);
   return icon;
 }
 
-const meetingPointIcon = createMarkerIcon(MEETING_POINT_LEGEND);
+const meetingPointIcon = createMarkerIcon(MEETING_POINT_LEGEND.color, "M");
 
-function getPersonMarkerIcon(role: string, name: string) {
-  return createMarkerIcon(getRoleDefinition(role), name);
+function getPersonMarkerIcon(label: string) {
+  return createMarkerIcon(PERSON_MARKER.color, label);
 }
 
-function getMeetingPointMarkerIcon(name: string) {
-  return createMarkerIcon(MEETING_POINT_LEGEND, name);
+function getMeetingPointMarkerIcon() {
+  return createMarkerIcon(MEETING_POINT_LEGEND.color, "M");
 }
 
 function getMarkerBounds(
@@ -170,7 +174,7 @@ function waitForVisibleTiles(map: L.Map, finish: () => void, maxWaitMs: number) 
   const done = () => {
     if (finished) return;
     finished = true;
-    window.setTimeout(finish, 300);
+    window.setTimeout(finish, 500);
   };
 
   window.setTimeout(done, maxWaitMs);
@@ -211,7 +215,7 @@ function prepareMapInstance(
   selectedMeetingLocation: SelectedLocation | undefined,
   finish: () => void
 ) {
-  waitForVisibleTiles(map, finish, 2500);
+  waitForVisibleTiles(map, finish, 4500);
   map.invalidateSize({ animate: false });
   fitMapToContent(
     map,
@@ -315,10 +319,10 @@ function PrintMapPreparer({
 }
 
 function LegendSwatch({
-  definition,
+  style,
   size = "default",
 }: {
-  definition: RoleDefinition;
+  style: MarkerStyle;
   size?: LegendSize;
 }) {
   const sizeClass =
@@ -328,32 +332,13 @@ function LegendSwatch({
 
   return (
     <span
-      className={`map-legend-swatch inline-flex shrink-0 items-center justify-center rounded-full border-white shadow-sm ${sizeClass}`}
-      style={{ backgroundColor: definition.color }}
+      className={`map-legend-swatch inline-flex shrink-0 items-center justify-center rounded-full border-white font-bold text-white shadow-sm ${sizeClass}`}
+      style={{ backgroundColor: style.color }}
       aria-hidden="true"
     >
-      {definition.emoji}
+      {style.label === PERSON_MARKER.label ? "#" : "M"}
     </span>
   );
-}
-
-function useLegendItems(people: Person[]) {
-  return useMemo(() => {
-    const seen = new Set<string>();
-    const items: RoleDefinition[] = [];
-
-    for (const person of people) {
-      const definition = getRoleDefinition(person.role);
-      const key = definition.label || "default";
-
-      if (seen.has(key)) continue;
-
-      seen.add(key);
-      items.push(definition);
-    }
-
-    return items;
-  }, [people]);
 }
 
 function MapLegend({
@@ -367,11 +352,10 @@ function MapLegend({
   size?: LegendSize;
   placement?: LegendPlacement;
 }) {
-  const legendItems = useLegendItems(people);
   const isCompact = size === "compact";
   const isBelow = placement === "below";
 
-  if (legendItems.length === 0 && meetingPoints.length === 0) {
+  if (people.length === 0 && meetingPoints.length === 0) {
     return null;
   }
 
@@ -401,19 +385,16 @@ function MapLegend({
     <div className={containerClass}>
       <p className={titleClass}>Legend</p>
       <ul className={listClass}>
-        {legendItems.map((definition) => (
-          <li
-            key={definition.label || "default"}
-            className={itemClass}
-          >
-            <LegendSwatch definition={definition} size={size} />
-            <span>{definition.label || "No role assigned"}</span>
+        {people.length > 0 && (
+          <li className={itemClass}>
+            <LegendSwatch style={PERSON_MARKER} size={size} />
+            <span>{PERSON_MARKER.label}</span>
           </li>
-        ))}
+        )}
 
         {meetingPoints.length > 0 && (
           <li className={itemClass}>
-            <LegendSwatch definition={MEETING_POINT_LEGEND} size={size} />
+            <LegendSwatch style={MEETING_POINT_LEGEND} size={size} />
             <span>{MEETING_POINT_LEGEND.label}</span>
           </li>
         )}
@@ -459,7 +440,7 @@ function MapInteractionShield({
       <button
         type="button"
         onClick={onDeactivate}
-        className="absolute top-2 right-2 z-[1001] rounded-md border border-gray-200 bg-white/95 px-2.5 py-1 text-xs font-medium text-gray-700 shadow-sm backdrop-blur-sm hover:bg-white print:hidden"
+        className="map-interaction-ui absolute top-2 right-2 z-[1001] rounded-md border border-gray-200 bg-white/95 px-2.5 py-1 text-xs font-medium text-gray-700 shadow-sm backdrop-blur-sm hover:bg-white print:hidden"
         aria-label="Lock map to prevent accidental dragging"
       >
         Lock map
@@ -471,13 +452,52 @@ function MapInteractionShield({
     <button
       type="button"
       onClick={onActivate}
-      className="absolute inset-0 z-[1001] flex cursor-default items-center justify-center bg-transparent print:hidden"
+      className="map-interaction-ui absolute inset-0 z-[1001] flex cursor-default items-center justify-center bg-transparent print:hidden"
       aria-label="Enable map interaction"
     >
       <span className="pointer-events-none rounded-lg border border-gray-200 bg-white/90 px-3 py-1.5 text-xs font-medium text-gray-600 shadow-sm backdrop-blur-sm">
         Click to move map
       </span>
     </button>
+  );
+}
+
+function BasemapSwitcher({
+  value,
+  onChange,
+  compact = false,
+}: {
+  value: BasemapId;
+  onChange: (basemap: BasemapId) => void;
+  compact?: boolean;
+}) {
+  return (
+    <div
+      className={`map-basemap-switcher flex flex-wrap gap-1 ${
+        compact ? "mb-0" : "mb-3"
+      }`}
+      role="group"
+      aria-label="Map style"
+    >
+      {BASEMAP_OPTIONS.map((option) => {
+        const isActive = option.id === value;
+
+        return (
+          <button
+            key={option.id}
+            type="button"
+            onClick={() => onChange(option.id)}
+            className={`rounded-md border px-2.5 py-1 text-xs font-medium transition ${
+              isActive
+                ? "border-gray-900 bg-gray-900 text-white"
+                : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
+            }`}
+          >
+            {option.label}
+          </button>
+        );
+      })}
+    </div>
   );
 }
 
@@ -492,9 +512,39 @@ export default function MapPicker({
   legendPlacement = "overlay",
   mapKey = "map",
   className,
+  flush = false,
   enablePrintPrepare = false,
+  basemap: basemapProp,
+  onBasemapChange,
+  showBasemapSwitcher = true,
 }: MapPickerProps) {
   const [isMapInteractive, setIsMapInteractive] = useState(false);
+  const [internalBasemap, setInternalBasemap] =
+    useState<BasemapId>(DEFAULT_BASEMAP);
+  const basemap = basemapProp ?? internalBasemap;
+
+  function handleBasemapChange(next: BasemapId) {
+    if (onBasemapChange) {
+      onBasemapChange(next);
+      return;
+    }
+    setInternalBasemap(next);
+  }
+
+  const positionedMarkers = useMemo(() => {
+    const personGroups = groupPeopleByLocation(people).map((group) => ({
+      ...group,
+      kind: "personGroup" as const,
+    }));
+
+    return spreadOverlappingMarkers([
+      ...personGroups,
+      ...meetingPoints.map((point) => ({
+        ...point,
+        kind: "meetingPoint" as const,
+      })),
+    ]);
+  }, [people, meetingPoints]);
   const heightClass =
     className ?? (large ? "h-[500px] print:h-[9.5in]" : "h-96");
   const showOverlayLegend =
@@ -503,13 +553,39 @@ export default function MapPicker({
     showLegend && legendPlacement === "below";
 
   return (
-    <div className={legendPlacement === "below" ? "print:break-inside-avoid" : undefined}>
     <div
-      className={`relative isolate z-0 overflow-hidden rounded-xl border border-gray-300 print:break-inside-avoid ${heightClass} ${
-        enablePrintPrepare ? "map-print-target" : ""
-      }`}
+      className={
+        flush
+          ? `flex h-full min-h-0 w-full flex-col ${
+              legendPlacement === "below" ? "print:break-inside-avoid" : ""
+            }`
+          : legendPlacement === "below"
+            ? "print:break-inside-avoid"
+            : undefined
+      }
+    >
+    {showBasemapSwitcher && !flush && (
+      <BasemapSwitcher
+        value={basemap}
+        onChange={handleBasemapChange}
+        compact={legendSize === "compact"}
+      />
+    )}
+    <div
+      className={`relative isolate z-0 min-h-0 flex-1 overflow-hidden print:break-inside-avoid ${
+        flush ? "rounded-none border-0" : "rounded-xl border border-gray-300"
+      } ${heightClass} ${enablePrintPrepare ? "map-print-target" : ""}`}
       onMouseLeave={() => setIsMapInteractive(false)}
     >
+      {showBasemapSwitcher && flush && (
+        <div className="absolute top-2 left-2 z-[1001] max-w-[calc(100%-6rem)] rounded-md bg-white/95 p-1 shadow-sm backdrop-blur-sm print:hidden">
+          <BasemapSwitcher
+            value={basemap}
+            onChange={handleBasemapChange}
+            compact
+          />
+        </div>
+      )}
       <MapContainer
         key={mapKey}
         center={[60.1699, 24.9384]}
@@ -521,11 +597,60 @@ export default function MapPicker({
         boxZoom={isMapInteractive}
         className="h-full w-full"
       >
-        <TileLayer
-          attribution="&copy; OpenStreetMap contributors"
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          crossOrigin="anonymous"
-        />
+        {basemap === "streets" && (
+          <TileLayer
+            attribution="&copy; OpenStreetMap contributors"
+            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            crossOrigin="anonymous"
+            maxZoom={19}
+          />
+        )}
+
+        {basemap === "satellite" && (
+          <TileLayer
+            attribution="Tiles &copy; Esri &mdash; Source: Esri, Maxar, Earthstar Geographics"
+            url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+            crossOrigin="anonymous"
+            maxZoom={19}
+          />
+        )}
+
+        {basemap === "hybrid" && (
+          <>
+            <TileLayer
+              attribution="Tiles &copy; Esri &mdash; Source: Esri, Maxar, Earthstar Geographics"
+              url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+              crossOrigin="anonymous"
+              maxZoom={19}
+            />
+            <TileLayer
+              attribution="Labels &copy; Esri"
+              url="https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}"
+              crossOrigin="anonymous"
+              maxZoom={19}
+              opacity={0.95}
+            />
+          </>
+        )}
+
+        {basemap === "topo" && (
+          <TileLayer
+            attribution="Map data: &copy; OpenStreetMap contributors, SRTM | Map style: &copy; OpenTopoMap (CC-BY-SA)"
+            url="https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png"
+            crossOrigin="anonymous"
+            maxZoom={17}
+          />
+        )}
+
+        {basemap === "light" && (
+          <TileLayer
+            attribution="&copy; OpenStreetMap contributors &copy; CARTO"
+            url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png"
+            subdomains="abcd"
+            crossOrigin="anonymous"
+            maxZoom={20}
+          />
+        )}
 
         <MapController
           people={people}
@@ -560,57 +685,72 @@ export default function MapPicker({
           </Marker>
         )}
 
-        {people.map((person) => {
-          const roleDefinition = getRoleDefinition(person.role);
+        {positionedMarkers.map((entry) => {
+          if (entry.kind === "personGroup") {
+            const group = entry;
+
+            return (
+              <Marker
+                key={`person-group-${group.id}`}
+                position={[group.displayLat, group.displayLng]}
+                icon={getPersonMarkerIcon(group.pinLabel)}
+              >
+                <Popup>
+                  <div style={{ minWidth: 140 }}>
+                    <div style={{ marginBottom: 4 }}>
+                      <strong>Label {group.pinLabel}</strong>
+                    </div>
+                    <div style={{ marginBottom: 4, color: "#4b5563" }}>
+                      {formatCompactAddress(group.address)}
+                    </div>
+                    {group.households.flatMap((household) =>
+                      household.members.map((member, memberIndex) => (
+                        <div
+                          key={`${household.id}-${memberIndex}`}
+                          style={{
+                            marginTop: 6,
+                            paddingTop: 6,
+                            borderTop: "1px solid #e5e7eb",
+                          }}
+                        >
+                          <strong>{member.name}</strong>
+                          {member.phone && (
+                            <>
+                              <br />
+                              {member.phone}
+                            </>
+                          )}
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </Popup>
+              </Marker>
+            );
+          }
+
+          const point = entry;
 
           return (
             <Marker
-              key={person.id}
-              position={[person.lat, person.lng]}
-              icon={getPersonMarkerIcon(person.role, person.name)}
+              key={`meeting-point-${point.id}`}
+              position={[point.displayLat, point.displayLng]}
+              icon={getMeetingPointMarkerIcon()}
             >
               <Popup>
-                <strong>
-                  {roleDefinition.emoji} {person.name}
-                </strong>
-                {person.role && (
-                  <>
-                    <br />
-                    {person.role}
-                  </>
-                )}
-                {person.phone && (
-                  <>
-                    <br />
-                    {person.phone}
-                  </>
-                )}
+                <strong>{point.name}</strong>
                 <br />
-                {formatCompactAddress(person.address)}
+                {formatCompactAddress(point.address)}
+                {point.notes && (
+                  <>
+                    <br />
+                    {point.notes}
+                  </>
+                )}
               </Popup>
             </Marker>
           );
         })}
-
-        {meetingPoints.map((point) => (
-          <Marker
-            key={point.id}
-            position={[point.lat, point.lng]}
-            icon={getMeetingPointMarkerIcon(point.name)}
-          >
-            <Popup>
-              <strong>🚩 {point.name}</strong>
-              <br />
-              {formatCompactAddress(point.address)}
-              {point.notes && (
-                <>
-                  <br />
-                  {point.notes}
-                </>
-              )}
-            </Popup>
-          </Marker>
-        ))}
       </MapContainer>
 
       <MapInteractionShield

@@ -1,12 +1,12 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { forwardRef } from "react";
+import { forwardRef, useEffect, useId, useState } from "react";
 import ClientOnly from "@/app/components/ClientOnly";
 import MapPlaceholder from "@/app/components/MapPlaceholder";
-import { formatCompactAddress } from "@/app/lib/address";
-import MeetingPointDistances from "@/app/components/MeetingPointDistances";
-import { formatPlanDate } from "@/app/lib/plans";
+import { formatPersonLegendEntry, PERSON_MARKER } from "@/app/lib/roles";
+import type { PdfOrientation } from "@/app/lib/pdf";
+import type { BasemapId } from "@/app/lib/basemaps";
 import type { MeetingPoint, Person } from "@/app/types";
 
 const MapPicker = dynamic(() => import("@/app/components/MapPicker"), {
@@ -14,188 +14,233 @@ const MapPicker = dynamic(() => import("@/app/components/MapPicker"), {
 });
 
 type GeneratedPlanSectionProps = {
-  displayPlanName: string;
-  planNotes: string;
-  createdAt: string;
-  updatedAt: string;
+  planName: string;
   people: Person[];
   meetingPoints: MeetingPoint[];
   isExportingPdf: boolean;
-  onExportPdf: () => void;
+  onClose: () => void;
+  onExportPdf: (orientation: PdfOrientation) => void;
   onPrintPlan: () => void;
+  basemap: BasemapId;
+  onBasemapChange: (basemap: BasemapId) => void;
 };
 
-const GeneratedPlanSection = forwardRef<HTMLElement, GeneratedPlanSectionProps>(
+const GeneratedPlanSection = forwardRef<HTMLDivElement, GeneratedPlanSectionProps>(
   function GeneratedPlanSection(
     {
-      displayPlanName,
-      planNotes,
-      createdAt,
-      updatedAt,
+      planName,
       people,
       meetingPoints,
       isExportingPdf,
+      onClose,
       onExportPdf,
       onPrintPlan,
+      basemap,
+      onBasemapChange,
     },
     ref
   ) {
+    const titleId = useId();
+    const [pdfOrientation, setPdfOrientation] =
+      useState<PdfOrientation>("portrait");
+
+    useEffect(() => {
+      const previousOverflow = document.body.style.overflow;
+      document.body.style.overflow = "hidden";
+
+      function onKeyDown(event: KeyboardEvent) {
+        if (event.key === "Escape") {
+          onClose();
+        }
+      }
+
+      window.addEventListener("keydown", onKeyDown);
+
+      return () => {
+        document.body.style.overflow = previousOverflow;
+        window.removeEventListener("keydown", onKeyDown);
+      };
+    }, [onClose]);
+
+    const legendPeople = [...people].sort((a, b) =>
+      a.label.localeCompare(b.label, undefined, { numeric: true })
+    );
+
     return (
-      <section
+      <div
         id="generated-plan"
-        ref={ref}
-        className="relative z-0 scroll-mt-44 rounded-xl bg-white p-6 text-gray-900 shadow print:mt-0 print:shadow-none mt-10"
+        className="generated-plan-modal fixed inset-0 z-[1200] flex items-center justify-center p-3 sm:p-6"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
       >
-        <div className="mb-4 flex flex-col gap-3 print:block">
-          <div>
-            <h2 className="text-2xl font-bold text-gray-900">
-              {displayPlanName}
-            </h2>
+        <button
+          type="button"
+          aria-label="Close generated map"
+          className="generated-plan-modal-backdrop absolute inset-0 bg-gray-900/50 print:hidden"
+          onClick={onClose}
+        />
 
-            <p className="text-gray-800">
-              Total marked addresses: {people.length}
-              {meetingPoints.length > 0 &&
-                ` · Meeting points: ${meetingPoints.length}`}
-            </p>
-
-            <div className="mt-2 text-sm text-gray-700">
-              <p>Created: {createdAt ? formatPlanDate(createdAt) : "—"}</p>
-              <p>
-                Last updated: {updatedAt ? formatPlanDate(updatedAt) : "—"}
+        <div className="generated-plan-modal-panel relative z-10 flex max-h-[min(94vh,56rem)] w-full max-w-[1480px] flex-col overflow-hidden rounded-xl bg-white shadow-2xl print:max-h-none print:max-w-none print:rounded-none print:shadow-none">
+          <div className="generated-plan-actions flex shrink-0 flex-col gap-3 border-b border-gray-200 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+            <div className="min-w-0">
+              <h2
+                id={titleId}
+                className="truncate text-base font-semibold text-gray-900 sm:text-lg"
+              >
+                {planName.trim() || "Generated map"}
+              </h2>
+              <p className="text-xs text-gray-500">
+                Map on page 1 · Legend on page 2
               </p>
             </div>
 
-            {planNotes.trim() && (
-              <div className="mt-4 rounded-lg bg-gray-50 p-4 text-sm text-gray-700">
-                <p className="mb-1 font-semibold text-gray-900">Plan Notes</p>
-                <p className="whitespace-pre-wrap">{planNotes}</p>
+            <div className="flex flex-wrap items-center gap-2">
+              <div
+                className="inline-flex rounded-md border border-gray-300 bg-white p-0.5"
+                role="group"
+                aria-label="PDF page orientation"
+              >
+                <button
+                  type="button"
+                  onClick={() => setPdfOrientation("portrait")}
+                  disabled={isExportingPdf}
+                  className={`rounded px-2.5 py-1.5 text-xs font-medium transition ${
+                    pdfOrientation === "portrait"
+                      ? "bg-gray-900 text-white"
+                      : "text-gray-700 hover:bg-gray-100"
+                  }`}
+                >
+                  Portrait
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPdfOrientation("landscape")}
+                  disabled={isExportingPdf}
+                  className={`rounded px-2.5 py-1.5 text-xs font-medium transition ${
+                    pdfOrientation === "landscape"
+                      ? "bg-gray-900 text-white"
+                      : "text-gray-700 hover:bg-gray-100"
+                  }`}
+                >
+                  Landscape
+                </button>
               </div>
-            )}
-          </div>
 
-          <div className="flex flex-col gap-2 sm:flex-row print:hidden">
-            <button
-              type="button"
-              onClick={onExportPdf}
-              disabled={isExportingPdf}
-              className="rounded-lg bg-blue-600 px-5 py-3 font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {isExportingPdf ? "Exporting PDF..." : "Export PDF"}
-            </button>
+              <button
+                type="button"
+                onClick={() => onExportPdf(pdfOrientation)}
+                disabled={isExportingPdf}
+                className="rounded-md bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60 sm:text-sm"
+              >
+                {isExportingPdf ? "Exporting…" : "Export PDF"}
+              </button>
 
-            <button
-              type="button"
-              onClick={onPrintPlan}
-              className="rounded-lg bg-gray-900 px-5 py-3 font-semibold text-white hover:bg-black"
-            >
-              Print Plan
-            </button>
-          </div>
-        </div>
+              <button
+                type="button"
+                onClick={onPrintPlan}
+                className="rounded-md bg-green-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-green-700 sm:text-sm"
+              >
+                Print
+              </button>
 
-        <ClientOnly
-          fallback={<MapPlaceholder className="h-[650px] print:h-[9.5in]" />}
-        >
-          <MapPicker
-            mapKey="generated-plan-map"
-            people={people}
-            meetingPoints={meetingPoints}
-            selectedLocation={null}
-            large
-            legendPlacement="below"
-            enablePrintPrepare
-            className="h-[650px] print:h-[9.5in]"
-          />
-        </ClientOnly>
-
-        <div className="mt-6 print:break-inside-avoid">
-          <h3 className="mb-3 text-lg font-semibold text-gray-900">
-            People & Contact List
-          </h3>
-
-          <div className="overflow-x-auto rounded-lg border border-gray-200">
-            <table className="w-full min-w-[640px] border-collapse text-left text-sm text-gray-900">
-              <thead className="bg-gray-50 text-gray-800">
-                <tr>
-                  <th className="border-b p-3 font-semibold">#</th>
-                  <th className="border-b p-3 font-semibold">Name</th>
-                  <th className="border-b p-3 font-semibold">Role</th>
-                  <th className="border-b p-3 font-semibold">Phone</th>
-                  <th className="border-b p-3 font-semibold">Address</th>
-                  <th className="border-b p-3 font-semibold">Coordinates</th>
-                  {meetingPoints.length > 0 && (
-                    <th className="border-b p-3 font-semibold">
-                      Meeting Points (distance)
-                    </th>
-                  )}
-                </tr>
-              </thead>
-
-              <tbody>
-                {people.map((person, index) => (
-                    <tr key={person.id} className="print:break-inside-avoid">
-                      <td className="border-b p-3">{index + 1}</td>
-                      <td className="border-b p-3 font-medium">{person.name}</td>
-                      <td className="border-b p-3">{person.role || "—"}</td>
-                      <td className="border-b p-3">{person.phone || "—"}</td>
-                      <td className="border-b p-3">{formatCompactAddress(person.address)}</td>
-                      <td className="border-b p-3 text-gray-600">
-                        {person.lat.toFixed(5)}, {person.lng.toFixed(5)}
-                      </td>
-                      {meetingPoints.length > 0 && (
-                        <td className="border-b p-3">
-                          <MeetingPointDistances
-                            person={person}
-                            meetingPoints={meetingPoints}
-                            variant="table"
-                          />
-                        </td>
-                      )}
-                    </tr>
-                  ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        {meetingPoints.length > 0 && (
-          <div className="mt-6 print:break-inside-avoid">
-            <h3 className="mb-3 text-lg font-semibold text-gray-900">
-              Meeting Points
-            </h3>
-
-            <div className="overflow-x-auto rounded-lg border border-gray-200">
-              <table className="w-full min-w-[640px] border-collapse text-left text-sm text-gray-900">
-                <thead className="bg-gray-50 text-gray-800">
-                  <tr>
-                    <th className="border-b p-3 font-semibold">#</th>
-                    <th className="border-b p-3 font-semibold">Name</th>
-                    <th className="border-b p-3 font-semibold">Address</th>
-                    <th className="border-b p-3 font-semibold">Notes</th>
-                    <th className="border-b p-3 font-semibold">Coordinates</th>
-                  </tr>
-                </thead>
-
-                <tbody>
-                  {meetingPoints.map((point, index) => (
-                    <tr key={point.id} className="print:break-inside-avoid">
-                      <td className="border-b p-3">{index + 1}</td>
-                      <td className="border-b p-3 font-medium">
-                        🚩 {point.name}
-                      </td>
-                      <td className="border-b p-3">{formatCompactAddress(point.address)}</td>
-                      <td className="border-b p-3">{point.notes || "—"}</td>
-                      <td className="border-b p-3 text-gray-600">
-                        {point.lat.toFixed(5)}, {point.lng.toFixed(5)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <button
+                type="button"
+                onClick={onClose}
+                className="generated-plan-modal-close rounded-md border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 sm:text-sm"
+              >
+                Close
+              </button>
             </div>
           </div>
-        )}
-      </section>
+
+          <div
+            ref={ref}
+            className="generated-plan-output min-h-0 flex-1 overflow-y-auto overscroll-y-contain bg-white print:overflow-visible"
+          >
+            <div
+              data-pdf-page
+              className="generated-plan-map-output p-3 sm:p-4 print:mx-auto print:border-0 print:p-0 print:rounded-none"
+            >
+              <ClientOnly
+                fallback={
+                  <MapPlaceholder className="h-[min(70vh,40rem)] w-full rounded-lg border-0 print:h-[9.5in] print:rounded-none" />
+                }
+              >
+                <MapPicker
+                  mapKey="generated-plan-map"
+                  people={people}
+                  meetingPoints={meetingPoints}
+                  selectedLocation={null}
+                  large
+                  showLegend={false}
+                  enablePrintPrepare
+                  className="h-[min(70vh,40rem)] w-full rounded-lg print:h-[9.5in] print:rounded-none"
+                  basemap={basemap}
+                  onBasemapChange={onBasemapChange}
+                />
+              </ClientOnly>
+            </div>
+
+            <div
+              data-pdf-page
+              className="generated-plan-legend-page border-t border-gray-200 bg-white px-5 py-6 sm:px-8 sm:py-8 print:border-0"
+            >
+              <h3 className="text-lg font-semibold text-gray-900">
+                Pin legend
+              </h3>
+              <p className="mt-1 text-sm text-gray-500">
+                Who each map number belongs to
+              </p>
+
+              {legendPeople.length === 0 ? (
+                <p className="mt-6 text-sm text-gray-500">No pins yet.</p>
+              ) : (
+                <ul className="mt-6 space-y-3">
+                  {legendPeople.map((person) => (
+                    <li
+                      key={person.id}
+                      className="flex items-start gap-3 text-sm text-gray-900 sm:text-base"
+                    >
+                      <span
+                        className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white"
+                        style={{ backgroundColor: PERSON_MARKER.color }}
+                        aria-hidden="true"
+                      >
+                        {person.label || "•"}
+                      </span>
+                      <span className="pt-0.5 leading-snug">
+                        {formatPersonLegendEntry(person)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              {meetingPoints.length > 0 && (
+                <div className="mt-8 border-t border-gray-100 pt-6">
+                  <h4 className="text-sm font-semibold tracking-wide text-gray-500 uppercase">
+                    Meeting points
+                  </h4>
+                  <ul className="mt-3 space-y-2">
+                    {meetingPoints.map((point) => (
+                      <li
+                        key={point.id}
+                        className="text-sm text-gray-900 sm:text-base"
+                      >
+                        <span className="font-medium">{point.name}</span>
+                        {point.notes ? (
+                          <span className="text-gray-600"> — {point.notes}</span>
+                        ) : null}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
     );
   }
 );

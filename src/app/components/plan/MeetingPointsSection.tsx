@@ -1,12 +1,9 @@
 "use client";
 
-import CollapsibleSection from "@/app/components/CollapsibleSection";
 import MeetingPointCard from "@/app/components/plan/MeetingPointCard";
 import type { GeocodeResult, MeetingPoint, SelectedLocation } from "@/app/types";
 
 type MeetingPointsSectionProps = {
-  isOpen: boolean;
-  onToggle: () => void;
   meetingPoints: MeetingPoint[];
   meetingPointName: string;
   meetingPointAddress: string;
@@ -25,8 +22,6 @@ type MeetingPointsSectionProps = {
 };
 
 export default function MeetingPointsSection({
-  isOpen,
-  onToggle,
   meetingPoints,
   meetingPointName,
   meetingPointAddress,
@@ -44,132 +39,130 @@ export default function MeetingPointsSection({
   onRemoveMeetingPoint,
 }: MeetingPointsSectionProps) {
   return (
-    <CollapsibleSection
-      id="meeting-points"
-      title="Meeting Points"
-      description="Rally points people should go to in an emergency."
-      badge={
-        <span className="rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-semibold text-gray-600">
-          {meetingPoints.length}
-        </span>
-      }
-      isOpen={isOpen}
-      onToggle={onToggle}
-    >
-      <div className="rounded-lg border border-gray-100 bg-gray-50 p-4">
-        <h3 className="mb-4 text-sm font-semibold uppercase tracking-wide text-gray-700">
-          Add Meeting Point
-        </h3>
+    <div id="meeting-points" className="flex min-h-0 flex-1 flex-col">
+      <div className="shrink-0 space-y-4 border-b border-gray-100 pb-4">
+        <p className="text-xs text-gray-500">
+          Rally points people should go to in an emergency.
+        </p>
 
-        <div className="mb-4">
-          <label className="mb-1 block text-sm font-medium text-gray-700">
+        <div>
+          <label className="mb-1 block text-xs font-medium text-gray-600">
             Name
           </label>
           <input
-            className="w-full rounded-lg border border-gray-300 p-3 text-gray-900"
+            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900"
             type="text"
-            placeholder="Example: Main Office Rally Point"
+            placeholder="Main office rally point"
             value={meetingPointName}
             onChange={(e) => onNameChange(e.target.value)}
           />
         </div>
 
-        <div className="mb-4">
-          <label className="mb-1 block text-sm font-medium text-gray-700">
+        <div>
+          <label className="mb-1 block text-xs font-medium text-gray-600">
             Address
           </label>
           <input
-            className="w-full rounded-lg border border-gray-300 p-3 text-gray-900"
+            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900"
             type="text"
-            placeholder="Example: Mannerheimintie 1, Helsinki, Finland"
+            placeholder="Street, city, country"
             value={meetingPointAddress}
             onChange={(e) => onAddressChange(e.target.value)}
           />
         </div>
 
-        <div className="mb-4">
-          <label className="mb-1 block text-sm font-medium text-gray-700">
+        <div>
+          <label className="mb-1 block text-xs font-medium text-gray-600">
             Notes (optional)
           </label>
           <textarea
-            className="min-h-16 w-full rounded-lg border border-gray-300 p-3 text-gray-900"
-            placeholder="Example: Wait at the main entrance."
+            className="min-h-16 w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900"
+            placeholder="Wait at the main entrance"
             value={meetingPointNotes}
             onChange={(e) => onNotesChange(e.target.value)}
           />
         </div>
 
-        {meetingSearchMessage && (
-          <div className="mb-4 rounded-lg bg-white p-3 text-sm text-gray-700">
-            {isSearchingMeeting ? "🔎 " : "📍 "}
-            {meetingSearchMessage}
-          </div>
+        {isSearchingMeeting && (
+          <p className="text-xs text-gray-500">Searching address…</p>
         )}
 
+        {!isSearchingMeeting &&
+          meetingSearchMessage &&
+          !pendingMeetingGeocode &&
+          !selectedMeetingLocation && (
+            <p className="text-xs text-amber-700">{meetingSearchMessage}</p>
+          )}
+
         {pendingMeetingGeocode && !selectedMeetingLocation && (
-          <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-            <p className="font-medium">Did you mean this address?</p>
-            <p className="mt-1">{pendingMeetingGeocode.compactAddress}</p>
+          <div className="flex flex-col gap-2 rounded-md border border-amber-200 bg-amber-50 p-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
+              <p className="text-xs font-semibold text-amber-900">
+                Confirm address
+              </p>
+              <p className="mt-0.5 text-sm text-amber-900">
+                {pendingMeetingGeocode.compactAddress}
+              </p>
+            </div>
             <button
               type="button"
               onClick={onConfirmAddress}
-              className="mt-3 w-full rounded-lg bg-amber-600 px-4 py-2 font-semibold text-white hover:bg-amber-700"
+              className="shrink-0 rounded-md bg-amber-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-amber-700"
             >
-              Use This Address
+              Use this
             </button>
           </div>
         )}
 
         {selectedMeetingLocation && (
-          <div className="mb-4 rounded-lg bg-green-50 p-3 text-sm text-green-700">
-            Address confirmed.
-            <br />
-            Lat: {selectedMeetingLocation.lat.toFixed(5)}
-            <br />
-            Lng: {selectedMeetingLocation.lng.toFixed(5)}
-          </div>
+          <p className="text-xs font-medium text-green-700">
+            ✓ {pendingMeetingGeocode?.compactAddress || meetingPointAddress}
+          </p>
         )}
 
         <button
           type="button"
           onClick={onAddMeetingPoint}
-          className="w-full rounded-lg bg-red-600 px-4 py-3 font-semibold text-white hover:bg-red-700"
+          className="w-full rounded-md bg-red-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-700"
         >
-          Add Meeting Point Marker
+          Add meeting point
         </button>
       </div>
 
-      <div>
-        <div className="mb-4 flex items-center justify-between gap-3">
-          <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-700">
-            Saved Meeting Points
+      <div className="flex min-h-0 flex-1 flex-col pt-4">
+        <div className="mb-2 flex shrink-0 items-center justify-between gap-3">
+          <h3 className="text-xs font-semibold tracking-wide text-gray-500 uppercase">
+            Saved points
           </h3>
-
           {meetingPoints.length > 0 && (
             <button
               type="button"
               onClick={onClearAll}
-              className="text-sm font-medium text-red-600 hover:text-red-800"
+              className="text-xs font-medium text-red-600 hover:text-red-800"
             >
               Clear all
             </button>
           )}
         </div>
 
-        {meetingPoints.length === 0 ? (
-          <p className="text-gray-500">No meeting points added yet.</p>
-        ) : (
-          <div className="grid gap-3">
-            {meetingPoints.map((point) => (
-              <MeetingPointCard
-                key={point.id}
-                point={point}
-                onRemove={() => onRemoveMeetingPoint(point.id)}
-              />
-            ))}
-          </div>
-        )}
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain pb-4">
+          {meetingPoints.length === 0 ? (
+            <p className="rounded-md border border-dashed border-gray-300 px-3 py-6 text-center text-xs text-gray-500">
+              No meeting points yet
+            </p>
+          ) : (
+            <div className="grid gap-2">
+              {meetingPoints.map((point) => (
+                <MeetingPointCard
+                  key={point.id}
+                  point={point}
+                  onRemove={() => onRemoveMeetingPoint(point.id)}
+                />
+              ))}
+            </div>
+          )}
+        </div>
       </div>
-    </CollapsibleSection>
+    </div>
   );
 }
