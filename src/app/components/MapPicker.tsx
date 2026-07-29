@@ -5,9 +5,11 @@ import { useEffect, useMemo, useState } from "react";
 import {
   MapContainer,
   Marker,
+  Polyline,
   Popup,
   TileLayer,
   useMap,
+  useMapEvents,
 } from "react-leaflet";
 
 import { formatCompactAddress } from "@/app/lib/address";
@@ -25,7 +27,16 @@ import {
   PERSON_MARKER,
   type MarkerStyle,
 } from "@/app/lib/roles";
-import type { MeetingPoint, Person, SelectedLocation } from "@/app/types";
+import {
+  getPlannedRoutePaths,
+  type RoutePath,
+} from "@/app/lib/routing";
+import type {
+  MeetingPoint,
+  Person,
+  PlannedRoute,
+  SelectedLocation,
+} from "@/app/types";
 import { PREPARE_MAP_PRINT_EVENT } from "@/app/lib/mapPrint";
 
 type LegendSize = "default" | "compact";
@@ -48,6 +59,13 @@ type MapPickerProps = {
   basemap?: BasemapId;
   onBasemapChange?: (basemap: BasemapId) => void;
   showBasemapSwitcher?: boolean;
+  /** When set, users can drop a pin by clicking the map. */
+  onMapPin?: (lat: number, lng: number) => void;
+  pinTargetLabel?: string;
+  /** User-defined routes to draw on the map. */
+  plannedRoutes?: PlannedRoute[];
+  /** Draw planned driving routes when available. */
+  showRoutes?: boolean;
 };
 
 delete (L.Icon.Default.prototype as unknown as { _getIconUrl?: unknown })
@@ -344,26 +362,32 @@ function LegendSwatch({
 function MapLegend({
   people,
   meetingPoints,
+  routeLegend,
   size = "default",
   placement = "overlay",
 }: {
   people: Person[];
   meetingPoints: MeetingPoint[];
+  routeLegend: { id: string; label: string; color: string }[];
   size?: LegendSize;
   placement?: LegendPlacement;
 }) {
   const isCompact = size === "compact";
   const isBelow = placement === "below";
 
-  if (people.length === 0 && meetingPoints.length === 0) {
+  if (
+    people.length === 0 &&
+    meetingPoints.length === 0 &&
+    routeLegend.length === 0
+  ) {
     return null;
   }
 
   const containerClass = isBelow
     ? "mt-3 rounded-lg border border-gray-200 bg-gray-50 p-3 print:break-inside-avoid print:bg-white"
     : isCompact
-      ? "pointer-events-none absolute bottom-2 left-2 z-10 max-w-[150px] rounded-md border border-gray-200 bg-white/90 p-1.5 shadow-md backdrop-blur-sm"
-      : "pointer-events-none absolute bottom-3 left-3 z-10 max-w-[220px] rounded-lg border border-gray-200 bg-white/95 p-3 shadow-lg backdrop-blur-sm";
+      ? "pointer-events-none absolute bottom-2 left-2 z-10 max-w-[170px] rounded-md border border-gray-200 bg-white/90 p-1.5 shadow-md backdrop-blur-sm"
+      : "pointer-events-none absolute bottom-3 left-3 z-10 max-w-[240px] rounded-lg border border-gray-200 bg-white/95 p-3 shadow-lg backdrop-blur-sm";
 
   const titleClass = isCompact
     ? "mb-1 text-[10px] font-semibold uppercase tracking-wide text-gray-600"
@@ -398,6 +422,19 @@ function MapLegend({
             <span>{MEETING_POINT_LEGEND.label}</span>
           </li>
         )}
+
+        {routeLegend.map((route) => (
+          <li key={route.id} className={itemClass}>
+            <span
+              className={`inline-block shrink-0 rounded-full ${
+                isCompact ? "h-0.5 w-4" : "h-1 w-5"
+              }`}
+              style={{ backgroundColor: route.color }}
+              aria-hidden="true"
+            />
+            <span className="min-w-0 truncate">{route.label}</span>
+          </li>
+        ))}
       </ul>
     </div>
   );
@@ -426,39 +463,107 @@ function MapInteractionController({ enabled }: { enabled: boolean }) {
   return null;
 }
 
+function MapClickPinHandler({
+  enabled,
+  onPin,
+}: {
+  enabled: boolean;
+  onPin: (lat: number, lng: number) => void;
+}) {
+  useMapEvents({
+    click(event) {
+      if (!enabled) return;
+      onPin(event.latlng.lat, event.latlng.lng);
+    },
+  });
+
+  return null;
+}
+
 function MapInteractionShield({
   active,
+  pinDropMode,
   onActivate,
   onDeactivate,
+  onStartPinDrop,
+  onCancelPinDrop,
+  pinTargetLabel,
 }: {
   active: boolean;
+  pinDropMode: boolean;
   onActivate: () => void;
   onDeactivate: () => void;
+  onStartPinDrop?: () => void;
+  onCancelPinDrop?: () => void;
+  pinTargetLabel?: string;
 }) {
+  if (pinDropMode) {
+    return (
+      <div className="map-interaction-ui absolute top-2 right-2 z-[1001] flex flex-col items-end gap-2 print:hidden">
+        <p className="rounded-md border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-900 shadow-sm">
+          Click the map to drop a pin
+          {pinTargetLabel ? ` for ${pinTargetLabel}` : ""}
+        </p>
+        <button
+          type="button"
+          onClick={onCancelPinDrop}
+          className="rounded-md border border-gray-300 bg-white/95 px-2.5 py-1 text-xs font-medium text-gray-700 shadow-sm backdrop-blur-sm hover:bg-white"
+        >
+          Cancel pin
+        </button>
+      </div>
+    );
+  }
+
   if (active) {
     return (
-      <button
-        type="button"
-        onClick={onDeactivate}
-        className="map-interaction-ui absolute top-2 right-2 z-[1001] rounded-md border border-gray-200 bg-white/95 px-2.5 py-1 text-xs font-medium text-gray-700 shadow-sm backdrop-blur-sm hover:bg-white print:hidden"
-        aria-label="Lock map to prevent accidental dragging"
-      >
-        Lock map
-      </button>
+      <div className="map-interaction-ui absolute top-2 right-2 z-[1001] flex flex-wrap justify-end gap-2 print:hidden">
+        {onStartPinDrop && (
+          <button
+            type="button"
+            onClick={onStartPinDrop}
+            className="rounded-md border border-blue-300 bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-800 shadow-sm hover:bg-blue-100"
+          >
+            Drop pin
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={onDeactivate}
+          className="rounded-md border border-gray-200 bg-white/95 px-2.5 py-1 text-xs font-medium text-gray-700 shadow-sm backdrop-blur-sm hover:bg-white"
+          aria-label="Lock map to prevent accidental dragging"
+        >
+          Lock map
+        </button>
+      </div>
     );
   }
 
   return (
-    <button
-      type="button"
-      onClick={onActivate}
-      className="map-interaction-ui absolute inset-0 z-[1001] flex cursor-default items-center justify-center bg-transparent print:hidden"
-      aria-label="Enable map interaction"
-    >
-      <span className="pointer-events-none rounded-lg border border-gray-200 bg-white/90 px-3 py-1.5 text-xs font-medium text-gray-600 shadow-sm backdrop-blur-sm">
-        Click to move map
-      </span>
-    </button>
+    <div className="map-interaction-ui absolute inset-0 z-[1001] print:hidden">
+      <button
+        type="button"
+        onClick={onActivate}
+        className="absolute inset-0 flex cursor-default items-center justify-center bg-transparent"
+        aria-label="Enable map interaction"
+      >
+        <span className="pointer-events-none rounded-lg border border-gray-200 bg-white/90 px-3 py-1.5 text-xs font-medium text-gray-600 shadow-sm backdrop-blur-sm">
+          Click to move map
+        </span>
+      </button>
+      {onStartPinDrop && (
+        <button
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            onStartPinDrop();
+          }}
+          className="absolute top-2 right-2 rounded-md border border-blue-300 bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-800 shadow-sm hover:bg-blue-100"
+        >
+          Drop pin
+        </button>
+      )}
+    </div>
   );
 }
 
@@ -517,11 +622,18 @@ export default function MapPicker({
   basemap: basemapProp,
   onBasemapChange,
   showBasemapSwitcher = true,
+  onMapPin,
+  pinTargetLabel,
+  plannedRoutes = [],
+  showRoutes = true,
 }: MapPickerProps) {
   const [isMapInteractive, setIsMapInteractive] = useState(false);
+  const [pinDropMode, setPinDropMode] = useState(false);
+  const [routes, setRoutes] = useState<RoutePath[]>([]);
   const [internalBasemap, setInternalBasemap] =
     useState<BasemapId>(DEFAULT_BASEMAP);
   const basemap = basemapProp ?? internalBasemap;
+  const mapControlsEnabled = isMapInteractive || pinDropMode;
 
   function handleBasemapChange(next: BasemapId) {
     if (onBasemapChange) {
@@ -530,6 +642,38 @@ export default function MapPicker({
     }
     setInternalBasemap(next);
   }
+
+  function startPinDrop() {
+    setIsMapInteractive(true);
+    setPinDropMode(true);
+  }
+
+  function cancelPinDrop() {
+    setPinDropMode(false);
+  }
+
+  function handleMapPin(lat: number, lng: number) {
+    if (!onMapPin) return;
+    onMapPin(lat, lng);
+    setPinDropMode(false);
+  }
+
+  useEffect(() => {
+    if (!showRoutes || plannedRoutes.length === 0) {
+      setRoutes([]);
+      return;
+    }
+
+    let cancelled = false;
+
+    getPlannedRoutePaths(plannedRoutes, people, meetingPoints).then((next) => {
+      if (!cancelled) setRoutes(next);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [people, meetingPoints, plannedRoutes, showRoutes]);
 
   const positionedMarkers = useMemo(() => {
     const personGroups = groupPeopleByLocation(people).map((group) => ({
@@ -551,6 +695,11 @@ export default function MapPicker({
     showLegend && legendPlacement === "overlay";
   const showBelowLegend =
     showLegend && legendPlacement === "below";
+  const routeLegend = routes.map((route) => ({
+    id: route.id,
+    label: `${route.fromLabel} → ${route.toLabel}`,
+    color: route.color,
+  }));
 
   return (
     <div
@@ -590,11 +739,11 @@ export default function MapPicker({
         key={mapKey}
         center={[60.1699, 24.9384]}
         zoom={11}
-        dragging={isMapInteractive}
-        scrollWheelZoom={isMapInteractive}
-        doubleClickZoom={isMapInteractive}
-        touchZoom={isMapInteractive}
-        boxZoom={isMapInteractive}
+        dragging={mapControlsEnabled}
+        scrollWheelZoom={mapControlsEnabled}
+        doubleClickZoom={mapControlsEnabled}
+        touchZoom={mapControlsEnabled}
+        boxZoom={mapControlsEnabled}
         className="h-full w-full"
       >
         {basemap === "streets" && (
@@ -659,7 +808,11 @@ export default function MapPicker({
           selectedMeetingLocation={selectedMeetingLocation}
         />
 
-        <MapInteractionController enabled={isMapInteractive} />
+        <MapInteractionController enabled={mapControlsEnabled} />
+
+        {onMapPin && (
+          <MapClickPinHandler enabled={pinDropMode} onPin={handleMapPin} />
+        )}
 
         {enablePrintPrepare && (
           <PrintMapPreparer
@@ -670,9 +823,32 @@ export default function MapPicker({
           />
         )}
 
+        {routes.map((route) => (
+          <Polyline
+            key={route.id}
+            positions={route.coordinates.map((point) => [
+              point.lat,
+              point.lng,
+            ])}
+            pathOptions={{
+              color: route.color,
+              weight: 4,
+              opacity: 0.8,
+              dashArray: route.isFallback ? "8 8" : undefined,
+              lineJoin: "round",
+              lineCap: "round",
+            }}
+          >
+            <Popup>
+              {route.fromLabel} → {route.toLabel}
+              {route.isFallback ? " (approx.)" : ""}
+            </Popup>
+          </Polyline>
+        ))}
+
         {selectedLocation && (
           <Marker position={[selectedLocation.lat, selectedLocation.lng]}>
-            <Popup>Address location found</Popup>
+            <Popup>Pinned / confirmed location</Popup>
           </Marker>
         )}
 
@@ -681,7 +857,7 @@ export default function MapPicker({
             position={[selectedMeetingLocation.lat, selectedMeetingLocation.lng]}
             icon={meetingPointIcon}
           >
-            <Popup>New meeting point location</Popup>
+            <Popup>Pinned / confirmed meeting point</Popup>
           </Marker>
         )}
 
@@ -704,24 +880,38 @@ export default function MapPicker({
                       {formatCompactAddress(group.address)}
                     </div>
                     {group.households.flatMap((household) =>
-                      household.members.map((member, memberIndex) => (
-                        <div
-                          key={`${household.id}-${memberIndex}`}
-                          style={{
-                            marginTop: 6,
-                            paddingTop: 6,
-                            borderTop: "1px solid #e5e7eb",
-                          }}
-                        >
-                          <strong>{member.name}</strong>
-                          {member.phone && (
-                            <>
-                              <br />
-                              {member.phone}
-                            </>
-                          )}
-                        </div>
-                      ))
+                      household.members.map((member, memberIndex) => {
+                        const status = member.status?.trim() ?? "";
+
+                        return (
+                          <div
+                            key={`${household.id}-${memberIndex}`}
+                            style={{
+                              marginTop: 6,
+                              paddingTop: 6,
+                              borderTop: "1px solid #e5e7eb",
+                            }}
+                          >
+                            <strong>{member.name}</strong>
+                            {status ? (
+                              <>
+                                {" "}
+                                (
+                                <span style={{ fontWeight: 700, fontStyle: "italic" }}>
+                                  {status}
+                                </span>
+                                )
+                              </>
+                            ) : null}
+                            {member.phone && (
+                              <>
+                                <br />
+                                {member.phone}
+                              </>
+                            )}
+                          </div>
+                        );
+                      })
                     )}
                   </div>
                 </Popup>
@@ -755,14 +945,22 @@ export default function MapPicker({
 
       <MapInteractionShield
         active={isMapInteractive}
+        pinDropMode={pinDropMode}
         onActivate={() => setIsMapInteractive(true)}
-        onDeactivate={() => setIsMapInteractive(false)}
+        onDeactivate={() => {
+          setIsMapInteractive(false);
+          setPinDropMode(false);
+        }}
+        onStartPinDrop={onMapPin ? startPinDrop : undefined}
+        onCancelPinDrop={cancelPinDrop}
+        pinTargetLabel={pinTargetLabel}
       />
 
       {showOverlayLegend && (
         <MapLegend
           people={people}
           meetingPoints={meetingPoints}
+          routeLegend={routeLegend}
           size={legendSize}
           placement="overlay"
         />
@@ -773,6 +971,7 @@ export default function MapPicker({
       <MapLegend
         people={people}
         meetingPoints={meetingPoints}
+        routeLegend={routeLegend}
         size={legendSize}
         placement="below"
       />

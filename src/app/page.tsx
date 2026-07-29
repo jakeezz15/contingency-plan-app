@@ -16,6 +16,7 @@ export default function Home() {
     updatedAt,
     address,
     label,
+    keyPeople,
     namesText,
     people,
     selectedLocation,
@@ -26,6 +27,7 @@ export default function Home() {
     meetingPointAddress,
     meetingPointNotes,
     meetingPoints,
+    routes,
     selectedMeetingLocation,
     pendingMeetingGeocode,
     isSearchingMeeting,
@@ -41,32 +43,37 @@ export default function Home() {
     setPlanName,
     setPlanNotes,
     setLabel,
+    setKeyPeople,
     setNamesText,
     handlePersonAddressChange,
     setMeetingPointName,
     handleMeetingPointAddressChange,
     setMeetingPointNotes,
-    setEditingPersonId,
     setBasemap,
     switchToPlan,
     createNewPlan,
     deleteActivePlan,
     generatePlan,
     closeGeneratedPlan,
-    printPlan,
     exportPdf,
     exportPlan,
     importPlan,
     confirmAddress,
     confirmMeetingAddress,
     addHousehold,
-    updatePerson,
+    startEditPerson,
+    cancelEditPerson,
     removePerson,
     clearAllPeople,
     addMeetingPoint,
     removeMeetingPoint,
     clearAllMeetingPoints,
+    addRoute,
+    updateRouteColor,
+    removeRoute,
+    clearAllRoutes,
     resetActivePlan,
+    pinLocationOnMap,
   } = useContingencyPlan();
 
   return (
@@ -97,10 +104,12 @@ export default function Home() {
           resetActivePlan={resetActivePlan}
           people={people}
           meetingPoints={meetingPoints}
+          routes={routes}
           editingPersonId={editingPersonId}
           generatePlanHint={generatePlanHint}
           canGeneratePlan={canGeneratePlan}
           label={label}
+          keyPeople={keyPeople}
           namesText={namesText}
           address={address}
           searchMessage={searchMessage}
@@ -108,13 +117,14 @@ export default function Home() {
           pendingGeocode={pendingGeocode}
           selectedLocation={selectedLocation}
           setLabel={setLabel}
+          setKeyPeople={setKeyPeople}
           setNamesText={setNamesText}
           handlePersonAddressChange={handlePersonAddressChange}
           confirmAddress={confirmAddress}
           addHousehold={addHousehold}
           clearAllPeople={clearAllPeople}
-          setEditingPersonId={setEditingPersonId}
-          updatePerson={updatePerson}
+          startEditPerson={startEditPerson}
+          cancelEditPerson={cancelEditPerson}
           removePerson={removePerson}
           meetingPointName={meetingPointName}
           meetingPointAddress={meetingPointAddress}
@@ -130,8 +140,13 @@ export default function Home() {
           addMeetingPoint={addMeetingPoint}
           clearAllMeetingPoints={clearAllMeetingPoints}
           removeMeetingPoint={removeMeetingPoint}
+          addRoute={addRoute}
+          updateRouteColor={updateRouteColor}
+          removeRoute={removeRoute}
+          clearAllRoutes={clearAllRoutes}
           basemap={basemap}
           setBasemap={setBasemap}
+          pinLocationOnMap={pinLocationOnMap}
         />
       </div>
 
@@ -141,10 +156,10 @@ export default function Home() {
           planName={planName}
           people={people}
           meetingPoints={meetingPoints}
+          routes={routes}
           isExportingPdf={isExportingPdf}
           onClose={closeGeneratedPlan}
           onExportPdf={exportPdf}
-          onPrintPlan={printPlan}
           basemap={basemap}
           onBasemapChange={setBasemap}
         />

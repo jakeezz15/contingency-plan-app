@@ -4,10 +4,11 @@ import dynamic from "next/dynamic";
 import { forwardRef, useEffect, useId, useState } from "react";
 import ClientOnly from "@/app/components/ClientOnly";
 import MapPlaceholder from "@/app/components/MapPlaceholder";
-import { formatPersonLegendEntry, PERSON_MARKER } from "@/app/lib/roles";
+import { PersonLegendLine } from "@/app/components/MemberNameLabel";
+import { PERSON_MARKER } from "@/app/lib/roles";
 import type { PdfOrientation } from "@/app/lib/pdf";
 import type { BasemapId } from "@/app/lib/basemaps";
-import type { MeetingPoint, Person } from "@/app/types";
+import type { MeetingPoint, Person, PlannedRoute } from "@/app/types";
 
 const MapPicker = dynamic(() => import("@/app/components/MapPicker"), {
   ssr: false,
@@ -17,10 +18,10 @@ type GeneratedPlanSectionProps = {
   planName: string;
   people: Person[];
   meetingPoints: MeetingPoint[];
+  routes?: PlannedRoute[];
   isExportingPdf: boolean;
   onClose: () => void;
   onExportPdf: (orientation: PdfOrientation) => void;
-  onPrintPlan: () => void;
   basemap: BasemapId;
   onBasemapChange: (basemap: BasemapId) => void;
 };
@@ -31,10 +32,10 @@ const GeneratedPlanSection = forwardRef<HTMLDivElement, GeneratedPlanSectionProp
       planName,
       people,
       meetingPoints,
+      routes = [],
       isExportingPdf,
       onClose,
       onExportPdf,
-      onPrintPlan,
       basemap,
       onBasemapChange,
     },
@@ -42,7 +43,7 @@ const GeneratedPlanSection = forwardRef<HTMLDivElement, GeneratedPlanSectionProp
   ) {
     const titleId = useId();
     const [pdfOrientation, setPdfOrientation] =
-      useState<PdfOrientation>("portrait");
+      useState<PdfOrientation>("landscape");
 
     useEffect(() => {
       const previousOverflow = document.body.style.overflow;
@@ -138,14 +139,6 @@ const GeneratedPlanSection = forwardRef<HTMLDivElement, GeneratedPlanSectionProp
 
               <button
                 type="button"
-                onClick={onPrintPlan}
-                className="rounded-md bg-green-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-green-700 sm:text-sm"
-              >
-                Print
-              </button>
-
-              <button
-                type="button"
                 onClick={onClose}
                 className="generated-plan-modal-close rounded-md border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 sm:text-sm"
               >
@@ -160,6 +153,7 @@ const GeneratedPlanSection = forwardRef<HTMLDivElement, GeneratedPlanSectionProp
           >
             <div
               data-pdf-page
+              data-pdf-map-export="true"
               className="generated-plan-map-output p-3 sm:p-4 print:mx-auto print:border-0 print:p-0 print:rounded-none"
             >
               <ClientOnly
@@ -171,6 +165,7 @@ const GeneratedPlanSection = forwardRef<HTMLDivElement, GeneratedPlanSectionProp
                   mapKey="generated-plan-map"
                   people={people}
                   meetingPoints={meetingPoints}
+                  plannedRoutes={routes}
                   selectedLocation={null}
                   large
                   showLegend={false}
@@ -184,6 +179,7 @@ const GeneratedPlanSection = forwardRef<HTMLDivElement, GeneratedPlanSectionProp
 
             <div
               data-pdf-page
+              data-pdf-align="top"
               className="generated-plan-legend-page border-t border-gray-200 bg-white px-5 py-6 sm:px-8 sm:py-8 print:border-0"
             >
               <h3 className="text-lg font-semibold text-gray-900">
@@ -210,7 +206,10 @@ const GeneratedPlanSection = forwardRef<HTMLDivElement, GeneratedPlanSectionProp
                         {person.label || "•"}
                       </span>
                       <span className="pt-0.5 leading-snug">
-                        {formatPersonLegendEntry(person)}
+                        <PersonLegendLine
+                          label={person.label}
+                          members={person.members}
+                        />
                       </span>
                     </li>
                   ))}

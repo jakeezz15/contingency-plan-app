@@ -5,16 +5,20 @@ import MapPreviewPanel from "@/app/components/plan/MapPreviewPanel";
 import MeetingPointsSection from "@/app/components/plan/MeetingPointsSection";
 import PeopleSection from "@/app/components/plan/PeopleSection";
 import PlanDetailsSection from "@/app/components/plan/PlanDetailsSection";
+import RoutesSection from "@/app/components/plan/RoutesSection";
 import WorkspaceSplit from "@/app/components/WorkspaceSplit";
 import type { BasemapId } from "@/app/lib/basemaps";
+import type { KeyPersonDraft } from "@/app/lib/roles";
 import type {
   GeocodeResult,
   MeetingPoint,
   Person,
+  PlannedRoute,
+  RouteEndpointRef,
   SelectedLocation,
 } from "@/app/types";
 
-type WorkspaceTab = "people" | "meeting-points";
+type WorkspaceTab = "people" | "meeting-points" | "routes";
 
 type PlanWorkspaceProps = {
   planName: string;
@@ -29,10 +33,12 @@ type PlanWorkspaceProps = {
   resetActivePlan: () => void;
   people: Person[];
   meetingPoints: MeetingPoint[];
+  routes: PlannedRoute[];
   editingPersonId: number | null;
   generatePlanHint: string;
   canGeneratePlan: boolean;
   label: string;
+  keyPeople: KeyPersonDraft[];
   namesText: string;
   address: string;
   searchMessage: string;
@@ -40,13 +46,14 @@ type PlanWorkspaceProps = {
   pendingGeocode: GeocodeResult | null;
   selectedLocation: SelectedLocation;
   setLabel: (value: string) => void;
+  setKeyPeople: (value: KeyPersonDraft[]) => void;
   setNamesText: (value: string) => void;
   handlePersonAddressChange: (value: string) => void;
   confirmAddress: () => void;
   addHousehold: () => void;
   clearAllPeople: () => void;
-  setEditingPersonId: (id: number | null) => void;
-  updatePerson: (person: Person) => void;
+  startEditPerson: (id: number) => void;
+  cancelEditPerson: () => void;
   removePerson: (id: number) => void;
   meetingPointName: string;
   meetingPointAddress: string;
@@ -62,8 +69,21 @@ type PlanWorkspaceProps = {
   addMeetingPoint: () => void;
   clearAllMeetingPoints: () => void;
   removeMeetingPoint: (id: number) => void;
+  addRoute: (
+    from: RouteEndpointRef,
+    to: RouteEndpointRef,
+    color: string
+  ) => void;
+  updateRouteColor: (id: string, color: string) => void;
+  removeRoute: (id: string) => void;
+  clearAllRoutes: () => void;
   basemap: BasemapId;
   setBasemap: (basemap: BasemapId) => void;
+  pinLocationOnMap: (
+    lat: number,
+    lng: number,
+    target: "person" | "meeting"
+  ) => void;
 };
 
 export default function PlanWorkspace({
@@ -79,10 +99,12 @@ export default function PlanWorkspace({
   resetActivePlan,
   people,
   meetingPoints,
+  routes,
   editingPersonId,
   generatePlanHint,
   canGeneratePlan,
   label,
+  keyPeople,
   namesText,
   address,
   searchMessage,
@@ -90,13 +112,14 @@ export default function PlanWorkspace({
   pendingGeocode,
   selectedLocation,
   setLabel,
+  setKeyPeople,
   setNamesText,
   handlePersonAddressChange,
   confirmAddress,
   addHousehold,
   clearAllPeople,
-  setEditingPersonId,
-  updatePerson,
+  startEditPerson,
+  cancelEditPerson,
   removePerson,
   meetingPointName,
   meetingPointAddress,
@@ -112,10 +135,16 @@ export default function PlanWorkspace({
   addMeetingPoint,
   clearAllMeetingPoints,
   removeMeetingPoint,
+  addRoute,
+  updateRouteColor,
+  removeRoute,
+  clearAllRoutes,
   basemap,
   setBasemap,
+  pinLocationOnMap,
 }: PlanWorkspaceProps) {
   const [tab, setTab] = useState<WorkspaceTab>("people");
+  const pinTarget = tab === "meeting-points" ? "meeting" : "person";
 
   return (
     <WorkspaceSplit
@@ -148,6 +177,12 @@ export default function PlanWorkspace({
               label="Meeting points"
               count={meetingPoints.length}
             />
+            <TabButton
+              active={tab === "routes"}
+              onClick={() => setTab("routes")}
+              label="Routes"
+              count={routes.length}
+            />
           </div>
 
           <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-4 pt-4 pb-0">
@@ -159,6 +194,7 @@ export default function PlanWorkspace({
                 generatePlanHint={generatePlanHint}
                 canGeneratePlan={canGeneratePlan}
                 label={label}
+                keyPeople={keyPeople}
                 namesText={namesText}
                 address={address}
                 searchMessage={searchMessage}
@@ -166,17 +202,17 @@ export default function PlanWorkspace({
                 pendingGeocode={pendingGeocode}
                 selectedLocation={selectedLocation}
                 onLabelChange={setLabel}
+                onKeyPeopleChange={setKeyPeople}
                 onNamesTextChange={setNamesText}
                 onAddressChange={handlePersonAddressChange}
                 onConfirmAddress={confirmAddress}
                 onAddHousehold={addHousehold}
                 onClearAll={clearAllPeople}
-                onEditPerson={setEditingPersonId}
-                onCancelEditPerson={() => setEditingPersonId(null)}
-                onSavePerson={updatePerson}
+                onEditPerson={startEditPerson}
+                onCancelEditPerson={cancelEditPerson}
                 onRemovePerson={removePerson}
               />
-            ) : (
+            ) : tab === "meeting-points" ? (
               <MeetingPointsSection
                 meetingPoints={meetingPoints}
                 meetingPointName={meetingPointName}
@@ -194,6 +230,16 @@ export default function PlanWorkspace({
                 onClearAll={clearAllMeetingPoints}
                 onRemoveMeetingPoint={removeMeetingPoint}
               />
+            ) : (
+              <RoutesSection
+                people={people}
+                meetingPoints={meetingPoints}
+                routes={routes}
+                onAddRoute={addRoute}
+                onUpdateRouteColor={updateRouteColor}
+                onRemoveRoute={removeRoute}
+                onClearAll={clearAllRoutes}
+              />
             )}
           </div>
         </div>
@@ -202,10 +248,17 @@ export default function PlanWorkspace({
         <MapPreviewPanel
           people={people}
           meetingPoints={meetingPoints}
+          plannedRoutes={routes}
           selectedLocation={selectedLocation}
           selectedMeetingLocation={selectedMeetingLocation}
           basemap={basemap}
           onBasemapChange={setBasemap}
+          pinTarget={pinTarget}
+          onMapPin={
+            tab === "routes"
+              ? undefined
+              : (lat, lng) => pinLocationOnMap(lat, lng, pinTarget)
+          }
         />
       }
     />
@@ -228,9 +281,7 @@ function TabButton({
       type="button"
       onClick={onClick}
       className={`relative flex-1 px-3 py-2.5 text-sm font-medium transition-colors ${
-        active
-          ? "text-gray-900"
-          : "text-gray-500 hover:text-gray-800"
+        active ? "text-gray-900" : "text-gray-500 hover:text-gray-800"
       }`}
     >
       <span className="inline-flex items-center gap-1.5">

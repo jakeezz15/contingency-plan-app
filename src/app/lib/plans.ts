@@ -1,4 +1,11 @@
-import type { HouseholdMember, MeetingPoint, Person, SavedPlan } from "@/app/types";
+import type {
+  HouseholdMember,
+  MeetingPoint,
+  Person,
+  PlannedRoute,
+  SavedPlan,
+} from "@/app/types";
+import { normalizePlannedRoutes, prunePlannedRoutes } from "@/app/lib/routing";
 
 export const LEGACY_STORAGE_KEY = "contingency-plan-people";
 export const PLANS_STORAGE_KEY = "contingency-plan-plans";
@@ -9,15 +16,22 @@ function normalizeMembers(person: Person): HouseholdMember[] {
     return person.members.map((member) => ({
       name: member.name?.trim() ?? "",
       phone: member.phone?.trim() ?? "",
+      status: member.status?.trim() ?? "",
     }));
   }
 
   const legacyName = person.name?.trim() ?? "";
   if (legacyName) {
-    return [{ name: legacyName, phone: person.phone?.trim() ?? "" }];
+    return [
+      {
+        name: legacyName,
+        phone: person.phone?.trim() ?? "",
+        status: "",
+      },
+    ];
   }
 
-  return [{ name: "", phone: "" }];
+  return [{ name: "", phone: "", status: "" }];
 }
 
 function normalizePerson(person: Person, index: number): Person {
@@ -38,7 +52,7 @@ function normalizePerson(person: Person, index: number): Person {
     members:
       members.length > 0
         ? members
-        : [{ name: "Unnamed", phone: "" }],
+        : [{ name: "Unnamed", phone: "", status: "" }],
     role: person.role ?? "",
   };
 }
@@ -70,6 +84,7 @@ export function createEmptyPlanData(): Omit<SavedPlan, "id"> {
     updatedAt: now,
     people: [],
     meetingPoints: [],
+    routes: [],
   };
 }
 
@@ -84,23 +99,32 @@ export function normalizePlanData(parsed: unknown): Omit<SavedPlan, "id"> {
       people: parsed.map((person: Person, index: number) =>
         normalizePerson(person, index)
       ),
+      routes: [],
     };
   }
 
   const data = parsed as Partial<SavedPlan>;
+  const people = (data.people ?? []).map((person: Person, index: number) =>
+    normalizePerson(person, index)
+  );
+  const meetingPoints = (data.meetingPoints ?? []).map((point: MeetingPoint) => ({
+    ...point,
+    notes: point.notes ?? "",
+  }));
+  const routes = prunePlannedRoutes(
+    normalizePlannedRoutes(data.routes),
+    people,
+    meetingPoints
+  );
 
   return {
     planName: data.planName ?? "",
     planNotes: data.planNotes ?? "",
     createdAt: data.createdAt ?? new Date().toISOString(),
     updatedAt: data.updatedAt ?? new Date().toISOString(),
-    people: (data.people ?? []).map((person: Person, index: number) =>
-      normalizePerson(person, index)
-    ),
-    meetingPoints: (data.meetingPoints ?? []).map((point: MeetingPoint) => ({
-      ...point,
-      notes: point.notes ?? "",
-    })),
+    people,
+    meetingPoints,
+    routes,
   };
 }
 

@@ -3,10 +3,24 @@ import {
   TABLOID_HEIGHT_MM,
   TABLOID_WIDTH_MM,
 } from "./print";
+import {
+  clampExportZoomRelated,
+  getMapExportPixelSize,
+  renderMapCanvas,
+} from "./mapExport";
+import type { BasemapId } from "./basemaps";
+import type { MeetingPoint, Person, PlannedRoute } from "@/app/types";
 
 export type PdfOrientation = "portrait" | "landscape";
 
-/** Capture scale for sharp tabloid print (~200–300 DPI feel). */
+export type MapPdfExportInput = {
+  people: Person[];
+  meetingPoints: MeetingPoint[];
+  routes?: PlannedRoute[];
+  basemap: BasemapId;
+};
+
+/** Capture scale for sharp non-map pages (legend, etc.). */
 function getHdCaptureScale() {
   if (typeof window === "undefined") return 3;
   return Math.min(4, Math.max(3, Math.ceil(window.devicePixelRatio || 2) + 1));
@@ -14,7 +28,8 @@ function getHdCaptureScale() {
 
 function drawCanvasOnPdfPage(
   pdf: InstanceType<typeof import("jspdf").default>,
-  canvas: HTMLCanvasElement
+  canvas: HTMLCanvasElement,
+  verticalAlign: "top" | "center" = "center"
 ) {
   const pageWidthMm = pdf.internal.pageSize.getWidth();
   const pageHeightMm = pdf.internal.pageSize.getHeight();
@@ -28,7 +43,14 @@ function drawCanvasOnPdfPage(
   let drawWidthMm: number;
   let drawHeightMm: number;
 
-  if (imageRatio > pageRatio) {
+  if (verticalAlign === "top") {
+    drawWidthMm = contentWidthMm;
+    drawHeightMm = contentWidthMm / imageRatio;
+    if (drawHeightMm > contentHeightMm) {
+      drawHeightMm = contentHeightMm;
+      drawWidthMm = contentHeightMm * imageRatio;
+    }
+  } else if (imageRatio > pageRatio) {
     drawWidthMm = contentWidthMm;
     drawHeightMm = contentWidthMm / imageRatio;
   } else {
@@ -37,7 +59,10 @@ function drawCanvasOnPdfPage(
   }
 
   const offsetXMm = marginMm + (contentWidthMm - drawWidthMm) / 2;
-  const offsetYMm = marginMm + (contentHeightMm - drawHeightMm) / 2;
+  const offsetYMm =
+    verticalAlign === "top"
+      ? marginMm
+      : marginMm + (contentHeightMm - drawHeightMm) / 2;
   const imageData = canvas.toDataURL("image/jpeg", 0.95);
 
   pdf.addImage(
@@ -55,7 +80,8 @@ function drawCanvasOnPdfPage(
 export async function exportElementToPdf(
   element: HTMLElement,
   fileName: string,
-  orientation: PdfOrientation = "portrait"
+  orientation: PdfOrientation = "portrait",
+  mapExport?: MapPdfExportInput
 ) {
   const [{ default: html2canvas }, { default: jsPDF }] = await Promise.all([
     import("html2canvas-pro"),
@@ -74,19 +100,38 @@ export async function exportElementToPdf(
   });
 
   for (let index = 0; index < targets.length; index += 1) {
-    const canvas = await html2canvas(targets[index], {
-      scale: getHdCaptureScale(),
-      useCORS: true,
-      backgroundColor: "#ffffff",
-      logging: false,
-      imageTimeout: 15000,
-    });
+    const target = targets[index];
+    const isMapPage = target.dataset.pdfMapExport === "true";
+    let canvas: HTMLCanvasElement;
+
+    if (isMapPage && mapExport) {
+      const raw = getMapExportPixelSize(orientation);
+      const pixels = clampExportZoomRelated(raw.widthPx, raw.heightPx);
+      canvas = await renderMapCanvas({
+        people: mapExport.people,
+        meetingPoints: mapExport.meetingPoints,
+        routes: mapExport.routes,
+        basemap: mapExport.basemap,
+        widthPx: pixels.widthPx,
+        heightPx: pixels.heightPx,
+      });
+    } else {
+      canvas = await html2canvas(target, {
+        scale: getHdCaptureScale(),
+        useCORS: true,
+        backgroundColor: "#ffffff",
+        logging: false,
+        imageTimeout: 15000,
+      });
+    }
 
     if (index > 0) {
       pdf.addPage([TABLOID_WIDTH_MM, TABLOID_HEIGHT_MM], orientation);
     }
 
-    drawCanvasOnPdfPage(pdf, canvas);
+    const verticalAlign =
+      target.dataset.pdfAlign === "top" ? "top" : "center";
+    drawCanvasOnPdfPage(pdf, canvas, verticalAlign);
   }
 
   pdf.save(fileName);

@@ -49,26 +49,92 @@ export function parseNamesText(text: string): string[] {
     .filter(Boolean);
 }
 
+export type KeyPersonDraft = {
+  name: string;
+  status: string;
+};
+
+export function emptyKeyPersonDraft(): KeyPersonDraft {
+  return { name: "", status: "" };
+}
+
+export function splitHouseholdMembers(members: { name: string; status?: string; phone?: string }[]) {
+  const keyPeople: KeyPersonDraft[] = [];
+  const otherNames: string[] = [];
+
+  for (const member of members) {
+    const name = member.name.trim();
+    if (!name) continue;
+
+    const status = member.status?.trim() ?? "";
+    if (status) {
+      keyPeople.push({ name, status });
+    } else {
+      otherNames.push(name);
+    }
+  }
+
+  return {
+    keyPeople: keyPeople.length > 0 ? keyPeople : [emptyKeyPersonDraft()],
+    otherNamesText: otherNames.join("\n"),
+  };
+}
+
+export function buildHouseholdMembers(
+  keyPeople: KeyPersonDraft[],
+  otherNamesText: string,
+  previousPhones?: Map<string, string>
+): { name: string; phone: string; status: string }[] {
+  const phoneFor = (name: string) =>
+    previousPhones?.get(name.trim().toLowerCase()) ?? "";
+
+  const keyed = keyPeople
+    .map((person) => ({
+      name: person.name.trim(),
+      status: person.status.trim(),
+      phone: phoneFor(person.name),
+    }))
+    .filter((person) => person.name && person.status);
+
+  const others = parseNamesText(otherNamesText).map((name) => ({
+    name,
+    status: "",
+    phone: phoneFor(name),
+  }));
+
+  return [...keyed, ...others];
+}
+
 /**
- * Legend line for a pin, e.g. "1 - Jake Family: Jake, Janine"
- * or "1 - Jake" when there is only one name.
+ * Plain-text legend line (kept for non-React uses).
+ * Prefer <PersonLegendLine /> in the UI so status can be styled.
  */
 export function formatPersonLegendEntry(person: {
   label: string;
-  members: { name: string }[];
+  members: { name: string; status?: string }[];
 }): string {
   const label = person.label.trim() || "•";
-  const names = person.members
-    .map((member) => member.name.trim())
+  const parts = person.members
+    .map((member) => {
+      const name = member.name.trim();
+      const status = member.status?.trim() ?? "";
+      if (!name) return "";
+      return status ? `${name} (${status})` : name;
+    })
     .filter(Boolean);
 
-  if (names.length === 0) {
+  if (parts.length === 0) {
     return `${label} — (no names)`;
   }
 
-  if (names.length === 1) {
-    return `${label} - ${names[0]}`;
+  if (parts.length === 1) {
+    return `${label} - ${parts[0]}`;
   }
 
-  return `${label} - ${names[0]} Family: ${names.join(", ")}`;
+  const titleSource =
+    person.members.find((member) => member.status?.trim())?.name.trim() ||
+    person.members.find((member) => member.name.trim())?.name.trim() ||
+    "Group";
+
+  return `${label} - ${titleSource} Family: ${parts.join(", ")}`;
 }
