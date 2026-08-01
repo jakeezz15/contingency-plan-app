@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { forwardRef, useEffect, useId, useState } from "react";
+import { forwardRef, useEffect, useId, useMemo, useState } from "react";
 import ClientOnly from "@/app/components/ClientOnly";
 import MapPlaceholder from "@/app/components/MapPlaceholder";
 import { PersonLegendLine } from "@/app/components/MemberNameLabel";
@@ -9,13 +9,30 @@ import {
   findNearestMeetingPoint,
   formatDistanceKm,
 } from "@/app/lib/geo";
-import { DEFAULT_PERSON_COLOR, normalizePlanColor } from "@/app/lib/colors";
+import {
+  DEFAULT_PERSON_COLOR,
+  DEFAULT_ROUTE_COLOR,
+  normalizePlanColor,
+} from "@/app/lib/colors";
+import {
+  getPlannedRoutePaths,
+  resolveEndpoint,
+  type RoutePath,
+} from "@/app/lib/routing";
 import type { PdfOrientation } from "@/app/lib/pdf";
 import type { BasemapId } from "@/app/lib/basemaps";
 import type { MeetingPoint, Person, PlannedRoute } from "@/app/types";
 
 function formatCoordinates(lat: number, lng: number) {
   return `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+}
+
+function formatRouteDistance(path: RoutePath) {
+  const distance = formatDistanceKm(path.distanceKm);
+  if (path.isFallback) {
+    return `${distance} approx.`;
+  }
+  return `${distance} driving`;
 }
 
 const MapPicker = dynamic(() => import("@/app/components/MapPicker"), {
@@ -52,6 +69,8 @@ const GeneratedPlanSection = forwardRef<HTMLDivElement, GeneratedPlanSectionProp
     const titleId = useId();
     const [pdfOrientation, setPdfOrientation] =
       useState<PdfOrientation>("landscape");
+    const [routePaths, setRoutePaths] = useState<RoutePath[]>([]);
+    const [routesLoading, setRoutesLoading] = useState(routes.length > 0);
 
     useEffect(() => {
       const previousOverflow = document.body.style.overflow;
@@ -71,9 +90,46 @@ const GeneratedPlanSection = forwardRef<HTMLDivElement, GeneratedPlanSectionProp
       };
     }, [onClose]);
 
-    const legendPeople = [...people].sort((a, b) =>
-      a.label.localeCompare(b.label, undefined, { numeric: true })
+    useEffect(() => {
+      if (routes.length === 0) {
+        setRoutePaths([]);
+        setRoutesLoading(false);
+        return;
+      }
+
+      let cancelled = false;
+      setRoutesLoading(true);
+
+      getPlannedRoutePaths(routes, people, meetingPoints).then((paths) => {
+        if (!cancelled) {
+          setRoutePaths(paths);
+          setRoutesLoading(false);
+        }
+      });
+
+      return () => {
+        cancelled = true;
+      };
+    }, [routes, people, meetingPoints]);
+
+    const legendPeople = useMemo(
+      () =>
+        [...people].sort((a, b) =>
+          a.label.localeCompare(b.label, undefined, { numeric: true })
+        ),
+      [people]
     );
+
+    const routesByPersonId = useMemo(() => {
+      const map = new Map<number, RoutePath[]>();
+      for (const path of routePaths) {
+        if (path.from.kind !== "person") continue;
+        const list = map.get(path.from.id) ?? [];
+        list.push(path);
+        map.set(path.from.id, list);
+      }
+      return map;
+    }, [routePaths]);
 
     return (
       <div
@@ -194,8 +250,8 @@ const GeneratedPlanSection = forwardRef<HTMLDivElement, GeneratedPlanSectionProp
                 Pin legend
               </h3>
               <p className="mt-1 text-sm text-gray-500">
-                Who each map number belongs to, with coordinates and distance to
-                the nearest meeting point
+                Who each map number belongs to, with coordinates, planned
+                routes, and nearest meeting point
               </p>
 
               {legendPeople.length === 0 ? (
@@ -207,6 +263,7 @@ const GeneratedPlanSection = forwardRef<HTMLDivElement, GeneratedPlanSectionProp
                       person,
                       meetingPoints
                     );
+                    const personRoutes = routesByPersonId.get(person.id) ?? [];
 
                     return (
                       <li
@@ -236,6 +293,40 @@ const GeneratedPlanSection = forwardRef<HTMLDivElement, GeneratedPlanSectionProp
                               {formatCoordinates(person.lat, person.lng)}
                             </span>
                           </p>
+
+                          {personRoutes.length > 0 ? (
+                            <ul className="mt-1 space-y-0.5">
+                              {personRoutes.map((path) => (
+                                <li
+                                  key={path.id}
+                                  className="flex items-start gap-2 text-xs text-gray-600 sm:text-sm"
+                                >
+                                  <span
+                                    className="mt-1.5 inline-block h-1 w-4 shrink-0 rounded-full"
+                                    style={{
+                                      backgroundColor: normalizePlanColor(
+                                        path.color,
+                                        DEFAULT_ROUTE_COLOR
+                                      ),
+                                    }}
+                                    aria-hidden="true"
+                                  />
+                                  <span>
+                                    Route to{" "}
+                                    <span className="font-medium text-gray-800">
+                                      {path.toLabel}
+                                    </span>{" "}
+                                    (
+                                    <span className="tabular-nums">
+                                      {formatRouteDistance(path)}
+                                    </span>
+                                    )
+                                  </span>
+                                </li>
+                              ))}
+                            </ul>
+                          ) : null}
+
                           <p className="mt-0.5 text-xs text-gray-600 sm:text-sm">
                             {nearest ? (
                               <>
@@ -245,7 +336,7 @@ const GeneratedPlanSection = forwardRef<HTMLDivElement, GeneratedPlanSectionProp
                                 </span>{" "}
                                 (
                                 <span className="tabular-nums">
-                                  {formatDistanceKm(nearest.distanceKm)}
+                                  {formatDistanceKm(nearest.distanceKm)} approx.
                                 </span>
                                 )
                               </>
@@ -284,6 +375,74 @@ const GeneratedPlanSection = forwardRef<HTMLDivElement, GeneratedPlanSectionProp
                       </li>
                     ))}
                   </ul>
+                </div>
+              )}
+
+              {(routes.length > 0 || routePaths.length > 0) && (
+                <div className="mt-8 border-t border-gray-100 pt-6">
+                  <h4 className="text-sm font-semibold tracking-wide text-gray-500 uppercase">
+                    Planned routes
+                  </h4>
+                  <p className="mt-1 text-xs text-gray-500">
+                    Same colors as the map lines. Driving distances when
+                    available; otherwise straight-line approx.
+                  </p>
+
+                  {routesLoading && routePaths.length === 0 ? (
+                    <p className="mt-3 text-sm text-gray-500">
+                      Loading route distances…
+                    </p>
+                  ) : routePaths.length === 0 ? (
+                    <p className="mt-3 text-sm text-gray-500">
+                      No valid routes to show.
+                    </p>
+                  ) : (
+                    <ul className="mt-3 space-y-2.5">
+                      {routePaths.map((path) => {
+                        const from =
+                          resolveEndpoint(path.from, people, meetingPoints) ??
+                          null;
+                        const to =
+                          resolveEndpoint(path.to, people, meetingPoints) ??
+                          null;
+
+                        return (
+                          <li
+                            key={path.id}
+                            className="flex items-start gap-3 text-sm text-gray-900 sm:text-base"
+                          >
+                            <span
+                              className="mt-2 inline-block h-1.5 w-5 shrink-0 rounded-full"
+                              style={{
+                                backgroundColor: normalizePlanColor(
+                                  path.color,
+                                  DEFAULT_ROUTE_COLOR
+                                ),
+                              }}
+                              aria-hidden="true"
+                            />
+                            <div className="min-w-0 leading-snug">
+                              <p>
+                                <span className="font-medium">
+                                  {from?.label ?? path.fromLabel}
+                                </span>
+                                <span className="mx-1.5 text-gray-400">→</span>
+                                <span className="font-medium">
+                                  {to?.label ?? path.toLabel}
+                                </span>
+                              </p>
+                              <p className="mt-0.5 text-xs text-gray-600 sm:text-sm">
+                                Distance:{" "}
+                                <span className="font-medium text-gray-800 tabular-nums">
+                                  {formatRouteDistance(path)}
+                                </span>
+                              </p>
+                            </div>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
                 </div>
               )}
             </div>
