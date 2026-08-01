@@ -1,4 +1,5 @@
 import { haversineDistanceKm } from "@/app/lib/geo";
+import { DEFAULT_PERSON_COLOR, normalizePlanColor } from "@/app/lib/colors";
 import type { Person } from "@/app/types";
 
 type MapCoordinate = {
@@ -21,6 +22,7 @@ export type PersonLocationGroup = {
   lng: number;
   address: string;
   pinLabel: string;
+  pinColor: string;
   /** Household entries that share this pin (usually one). */
   households: Person[];
 };
@@ -193,6 +195,10 @@ export function groupPeopleByLocation(
       address,
       households,
       pinLabel: formatGroupPinLabel(households),
+      pinColor: normalizePlanColor(
+        households[0].color,
+        DEFAULT_PERSON_COLOR
+      ),
     };
   });
 }

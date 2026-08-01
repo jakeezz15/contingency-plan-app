@@ -1,5 +1,6 @@
 import { getBasemap, type BasemapId, type BasemapLayer } from "@/app/lib/basemaps";
-import { PERSON_MARKER, MEETING_POINT_LEGEND } from "@/app/lib/roles";
+import { DEFAULT_PERSON_COLOR, normalizePlanColor } from "@/app/lib/colors";
+import { MEETING_POINT_LEGEND } from "@/app/lib/roles";
 import { getPlannedRoutePaths } from "@/app/lib/routing";
 import type { MeetingPoint, Person, PlannedRoute } from "@/app/types";
 
@@ -209,7 +210,7 @@ export function collectExportMarkers(
     lat: person.lat,
     lng: person.lng,
     label: person.label || "•",
-    color: PERSON_MARKER.color,
+    color: normalizePlanColor(person.color, DEFAULT_PERSON_COLOR),
   }));
 
   const meetingMarkers = meetingPoints.map((point) => ({

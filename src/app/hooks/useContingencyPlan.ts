@@ -13,6 +13,11 @@ import {
   type KeyPersonDraft,
 } from "@/app/lib/roles";
 import {
+  DEFAULT_PERSON_COLOR,
+  normalizePlanColor,
+  suggestNextPlanColor,
+} from "@/app/lib/colors";
+import {
   ACTIVE_PLAN_STORAGE_KEY,
   createEmptyPlan,
   generatePlanId,
@@ -44,6 +49,7 @@ export function useContingencyPlan() {
 
   const [address, setAddress] = useState("");
   const [label, setLabel] = useState("1");
+  const [labelColor, setLabelColor] = useState(DEFAULT_PERSON_COLOR);
   const [keyPeople, setKeyPeople] = useState<KeyPersonDraft[]>([
     emptyKeyPersonDraft(),
   ]);
@@ -81,6 +87,10 @@ export function useContingencyPlan() {
   const importInputRef = useRef<HTMLInputElement>(null);
   const generatedPlanRef = useRef<HTMLDivElement>(null);
 
+  function nextLabelColor(currentPeople: Person[]) {
+    return suggestNextPlanColor(currentPeople.map((person) => person.color));
+  }
+
   function loadPlanIntoEditor(plan: SavedPlan) {
     setPlanName(plan.planName);
     setPlanNotes(plan.planNotes);
@@ -90,6 +100,7 @@ export function useContingencyPlan() {
     setMeetingPoints(plan.meetingPoints);
     setRoutes(plan.routes ?? []);
     setLabel(suggestNextPersonLabel(plan.people.map((person) => person.label)));
+    setLabelColor(nextLabelColor(plan.people));
     setKeyPeople([emptyKeyPersonDraft()]);
     setNamesText("");
   }
@@ -98,6 +109,7 @@ export function useContingencyPlan() {
     setEditingPersonId(null);
     setAddress("");
     setLabel(suggestNextPersonLabel(currentPeople.map((person) => person.label)));
+    setLabelColor(nextLabelColor(currentPeople));
     setKeyPeople([emptyKeyPersonDraft()]);
     setNamesText("");
     setSelectedLocation(null);
@@ -113,6 +125,7 @@ export function useContingencyPlan() {
 
     setEditingPersonId(id);
     setLabel(person.label);
+    setLabelColor(normalizePlanColor(person.color, DEFAULT_PERSON_COLOR));
     setAddress(person.address);
     setKeyPeople(split.keyPeople);
     setNamesText(split.otherNamesText);
@@ -443,6 +456,7 @@ export function useContingencyPlan() {
           ? {
               ...person,
               label: label.trim(),
+              color: normalizePlanColor(labelColor, DEFAULT_PERSON_COLOR),
               address: pendingGeocode?.compactAddress ?? address.trim(),
               lat: selectedLocation.lat,
               lng: selectedLocation.lng,
@@ -459,6 +473,7 @@ export function useContingencyPlan() {
     const newPerson: Person = {
       id: Date.now(),
       label: label.trim(),
+      color: normalizePlanColor(labelColor, DEFAULT_PERSON_COLOR),
       address: pendingGeocode?.compactAddress ?? address.trim(),
       lat: selectedLocation.lat,
       lng: selectedLocation.lng,
@@ -846,6 +861,7 @@ export function useContingencyPlan() {
     updatedAt,
     address,
     label,
+    labelColor,
     keyPeople,
     namesText,
     people,
@@ -881,6 +897,7 @@ export function useContingencyPlan() {
     },
     handlePersonAddressChange,
     setLabel,
+    setLabelColor,
     setKeyPeople,
     setNamesText,
     setMeetingPointName,

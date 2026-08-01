@@ -38,6 +38,7 @@ type PlanWorkspaceProps = {
   generatePlanHint: string;
   canGeneratePlan: boolean;
   label: string;
+  labelColor: string;
   keyPeople: KeyPersonDraft[];
   namesText: string;
   address: string;
@@ -46,6 +47,7 @@ type PlanWorkspaceProps = {
   pendingGeocode: GeocodeResult | null;
   selectedLocation: SelectedLocation;
   setLabel: (value: string) => void;
+  setLabelColor: (value: string) => void;
   setKeyPeople: (value: KeyPersonDraft[]) => void;
   setNamesText: (value: string) => void;
   handlePersonAddressChange: (value: string) => void;
@@ -104,6 +106,7 @@ export default function PlanWorkspace({
   generatePlanHint,
   canGeneratePlan,
   label,
+  labelColor,
   keyPeople,
   namesText,
   address,
@@ -112,6 +115,7 @@ export default function PlanWorkspace({
   pendingGeocode,
   selectedLocation,
   setLabel,
+  setLabelColor,
   setKeyPeople,
   setNamesText,
   handlePersonAddressChange,
@@ -194,6 +198,7 @@ export default function PlanWorkspace({
                 generatePlanHint={generatePlanHint}
                 canGeneratePlan={canGeneratePlan}
                 label={label}
+                labelColor={labelColor}
                 keyPeople={keyPeople}
                 namesText={namesText}
                 address={address}
@@ -202,6 +207,7 @@ export default function PlanWorkspace({
                 pendingGeocode={pendingGeocode}
                 selectedLocation={selectedLocation}
                 onLabelChange={setLabel}
+                onLabelColorChange={setLabelColor}
                 onKeyPeopleChange={setKeyPeople}
                 onNamesTextChange={setNamesText}
                 onAddressChange={handlePersonAddressChange}

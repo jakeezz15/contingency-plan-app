@@ -1,10 +1,14 @@
 "use client";
 
 import KeyPeopleFields from "@/app/components/KeyPeopleFields";
+import ColorSwatches from "@/app/components/ColorSwatches";
 import PersonCard from "@/app/components/PersonCard";
 import {
+  DEFAULT_PERSON_COLOR,
+  normalizePlanColor,
+} from "@/app/lib/colors";
+import {
   buildHouseholdMembers,
-  PERSON_MARKER,
   type KeyPersonDraft,
 } from "@/app/lib/roles";
 import type {
@@ -21,6 +25,7 @@ type PeopleSectionProps = {
   generatePlanHint: string;
   canGeneratePlan: boolean;
   label: string;
+  labelColor: string;
   keyPeople: KeyPersonDraft[];
   namesText: string;
   address: string;
@@ -29,6 +34,7 @@ type PeopleSectionProps = {
   pendingGeocode: GeocodeResult | null;
   selectedLocation: SelectedLocation;
   onLabelChange: (value: string) => void;
+  onLabelColorChange: (value: string) => void;
   onKeyPeopleChange: (value: KeyPersonDraft[]) => void;
   onNamesTextChange: (value: string) => void;
   onAddressChange: (value: string) => void;
@@ -47,6 +53,7 @@ export default function PeopleSection({
   generatePlanHint,
   canGeneratePlan,
   label,
+  labelColor,
   keyPeople,
   namesText,
   address,
@@ -55,6 +62,7 @@ export default function PeopleSection({
   pendingGeocode,
   selectedLocation,
   onLabelChange,
+  onLabelColorChange,
   onKeyPeopleChange,
   onNamesTextChange,
   onAddressChange,
@@ -69,6 +77,7 @@ export default function PeopleSection({
   const memberCount = buildHouseholdMembers(keyPeople, namesText).length;
   const canSubmit =
     Boolean(selectedLocation) && Boolean(label.trim()) && memberCount > 0;
+  const pinColor = normalizePlanColor(labelColor, DEFAULT_PERSON_COLOR);
 
   return (
     <div id="people" className="flex min-h-0 flex-1 flex-col">
@@ -80,7 +89,7 @@ export default function PeopleSection({
           <p className="text-xs text-gray-500">
             {isEditing
               ? "Editing pin — same form as create. Save when done."
-              : "One label = one pin. Type an address, or use Drop pin on the map."}
+              : "One label = one pin. Type an address, or use Drop pin on the map. Pick a color to tell pins apart."}
           </p>
           {isEditing && (
             <button
@@ -101,7 +110,7 @@ export default function PeopleSection({
             <div className="relative">
               <span
                 className="pointer-events-none absolute top-1/2 left-2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full text-[11px] font-bold text-white"
-                style={{ backgroundColor: PERSON_MARKER.color }}
+                style={{ backgroundColor: pinColor }}
                 aria-hidden="true"
               >
                 {(label.trim() || "•").slice(0, 4)}
@@ -130,6 +139,18 @@ export default function PeopleSection({
               onChange={(e) => onAddressChange(e.target.value)}
             />
           </div>
+        </div>
+
+        <div>
+          <label className="mb-1.5 block text-xs font-medium text-gray-600">
+            Pin color
+          </label>
+          <ColorSwatches
+            value={pinColor}
+            onChange={onLabelColorChange}
+            name="person-label-color"
+            label="Pin color"
+          />
         </div>
 
         {isSearching && (

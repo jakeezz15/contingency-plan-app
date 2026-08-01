@@ -6,6 +6,14 @@ import type {
   RouteEndpointRef,
 } from "@/app/types";
 
+import {
+  DEFAULT_ROUTE_COLOR,
+  isPlanColor,
+  PLAN_COLOR_OPTIONS,
+  suggestNextPlanColor,
+  normalizePlanColor,
+} from "@/app/lib/colors";
+
 export type LatLng = { lat: number; lng: number };
 
 export type RoutePath = {
@@ -21,40 +29,19 @@ export type RoutePath = {
   isFallback: boolean;
 };
 
-const DEFAULT_ROUTE_COLOR = "#dc2626";
-
-/** Distinct palette for route lines (map + PDF). */
-export const ROUTE_COLOR_OPTIONS = [
-  { value: "#dc2626", label: "Red" },
-  { value: "#ea580c", label: "Orange" },
-  { value: "#ca8a04", label: "Gold" },
-  { value: "#16a34a", label: "Green" },
-  { value: "#0891b2", label: "Teal" },
-  { value: "#2563eb", label: "Blue" },
-  { value: "#7c3aed", label: "Purple" },
-  { value: "#db2777", label: "Pink" },
-  { value: "#57534e", label: "Stone" },
-] as const;
+/** @deprecated Prefer PLAN_COLOR_OPTIONS from colors.ts */
+export const ROUTE_COLOR_OPTIONS = PLAN_COLOR_OPTIONS;
 
 export function isRouteColor(value: string): boolean {
-  return ROUTE_COLOR_OPTIONS.some((option) => option.value === value);
+  return isPlanColor(value);
 }
 
 export function normalizeRouteColor(value: unknown): string {
-  if (typeof value === "string" && isRouteColor(value)) return value;
-  return DEFAULT_ROUTE_COLOR;
+  return normalizePlanColor(value, DEFAULT_ROUTE_COLOR);
 }
 
-/** Pick the next unused palette color, cycling if all are used. */
 export function suggestNextRouteColor(existingColors: string[]): string {
-  const used = new Set(existingColors);
-  const unused = ROUTE_COLOR_OPTIONS.find(
-    (option) => !used.has(option.value)
-  );
-  if (unused) return unused.value;
-  return ROUTE_COLOR_OPTIONS[
-    existingColors.length % ROUTE_COLOR_OPTIONS.length
-  ].value;
+  return suggestNextPlanColor(existingColors);
 }
 
 type CacheEntry = {

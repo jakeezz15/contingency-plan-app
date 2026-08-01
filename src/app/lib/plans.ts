@@ -5,6 +5,7 @@ import type {
   PlannedRoute,
   SavedPlan,
 } from "@/app/types";
+import { DEFAULT_PERSON_COLOR, normalizePlanColor } from "@/app/lib/colors";
 import { normalizePlannedRoutes, prunePlannedRoutes } from "@/app/lib/routing";
 
 export const LEGACY_STORAGE_KEY = "contingency-plan-people";
@@ -46,6 +47,7 @@ function normalizePerson(person: Person, index: number): Person {
   return {
     id: person.id,
     label,
+    color: normalizePlanColor(person.color, DEFAULT_PERSON_COLOR),
     address: person.address ?? "",
     lat: person.lat,
     lng: person.lng,

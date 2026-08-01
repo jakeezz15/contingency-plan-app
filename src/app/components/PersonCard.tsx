@@ -3,7 +3,7 @@
 import MemberNameLabel from "@/app/components/MemberNameLabel";
 import MeetingPointDistances from "@/app/components/MeetingPointDistances";
 import { formatCompactAddress } from "@/app/lib/address";
-import { PERSON_MARKER } from "@/app/lib/roles";
+import { DEFAULT_PERSON_COLOR, normalizePlanColor } from "@/app/lib/colors";
 import type { MeetingPoint, Person } from "@/app/types";
 
 type PersonCardProps = {
@@ -22,6 +22,7 @@ export default function PersonCard({
   onRemove,
 }: PersonCardProps) {
   const members = person.members.filter((member) => member.name.trim());
+  const pinColor = normalizePlanColor(person.color, DEFAULT_PERSON_COLOR);
 
   return (
     <div
@@ -36,7 +37,7 @@ export default function PersonCard({
           <div className="flex items-center gap-2.5">
             <span
               className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white"
-              style={{ backgroundColor: PERSON_MARKER.color }}
+              style={{ backgroundColor: pinColor }}
               aria-hidden="true"
             >
               {person.label || "•"}
