@@ -27,6 +27,7 @@ import {
   PERSON_MARKER,
   type MarkerStyle,
 } from "@/app/lib/roles";
+import { DEFAULT_PERSON_COLOR, normalizePlanColor } from "@/app/lib/colors";
 import {
   getPlannedRoutePaths,
   type RoutePath,
@@ -126,8 +127,8 @@ function createMarkerIcon(color: string, pinText: string) {
 
 const meetingPointIcon = createMarkerIcon(MEETING_POINT_LEGEND.color, "M");
 
-function getPersonMarkerIcon(label: string) {
-  return createMarkerIcon(PERSON_MARKER.color, label);
+function getPersonMarkerIcon(label: string, color: string) {
+  return createMarkerIcon(color, label);
 }
 
 function getMeetingPointMarkerIcon() {
@@ -410,10 +411,31 @@ function MapLegend({
       <p className={titleClass}>Legend</p>
       <ul className={listClass}>
         {people.length > 0 && (
-          <li className={itemClass}>
-            <LegendSwatch style={PERSON_MARKER} size={size} />
-            <span>{PERSON_MARKER.label}</span>
-          </li>
+          <>
+            {people.map((person) => (
+              <li key={person.id} className={itemClass}>
+                <span
+                  className={`inline-flex shrink-0 items-center justify-center rounded-full border border-white font-bold text-white shadow-sm ${
+                    isCompact
+                      ? "h-4 w-4 text-[9px]"
+                      : "h-5 w-5 text-[10px]"
+                  }`}
+                  style={{
+                    backgroundColor: normalizePlanColor(
+                      person.color,
+                      DEFAULT_PERSON_COLOR
+                    ),
+                  }}
+                  aria-hidden="true"
+                >
+                  {(person.label || "•").slice(0, 2)}
+                </span>
+                <span className="min-w-0 truncate">
+                  Pin {person.label || "—"}
+                </span>
+              </li>
+            ))}
+          </>
         )}
 
         {meetingPoints.length > 0 && (
@@ -869,7 +891,7 @@ export default function MapPicker({
               <Marker
                 key={`person-group-${group.id}`}
                 position={[group.displayLat, group.displayLng]}
-                icon={getPersonMarkerIcon(group.pinLabel)}
+                icon={getPersonMarkerIcon(group.pinLabel, group.pinColor)}
               >
                 <Popup>
                   <div style={{ minWidth: 140 }}>

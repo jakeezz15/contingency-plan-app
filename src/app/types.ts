@@ -9,6 +9,8 @@ export type Person = {
   id: number;
   /** Single map pin label for everyone at this address (e.g. "1"). */
   label: string;
+  /** Hex color for this pin on the map / PDF / legend. */
+  color: string;
   address: string;
   lat: number;
   lng: number;

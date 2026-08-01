@@ -5,10 +5,18 @@ import { forwardRef, useEffect, useId, useState } from "react";
 import ClientOnly from "@/app/components/ClientOnly";
 import MapPlaceholder from "@/app/components/MapPlaceholder";
 import { PersonLegendLine } from "@/app/components/MemberNameLabel";
-import { PERSON_MARKER } from "@/app/lib/roles";
+import {
+  findNearestMeetingPoint,
+  formatDistanceKm,
+} from "@/app/lib/geo";
+import { DEFAULT_PERSON_COLOR, normalizePlanColor } from "@/app/lib/colors";
 import type { PdfOrientation } from "@/app/lib/pdf";
 import type { BasemapId } from "@/app/lib/basemaps";
 import type { MeetingPoint, Person, PlannedRoute } from "@/app/types";
+
+function formatCoordinates(lat: number, lng: number) {
+  return `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+}
 
 const MapPicker = dynamic(() => import("@/app/components/MapPicker"), {
   ssr: false,
@@ -186,33 +194,69 @@ const GeneratedPlanSection = forwardRef<HTMLDivElement, GeneratedPlanSectionProp
                 Pin legend
               </h3>
               <p className="mt-1 text-sm text-gray-500">
-                Who each map number belongs to
+                Who each map number belongs to, with coordinates and distance to
+                the nearest meeting point
               </p>
 
               {legendPeople.length === 0 ? (
                 <p className="mt-6 text-sm text-gray-500">No pins yet.</p>
               ) : (
-                <ul className="mt-6 space-y-3">
-                  {legendPeople.map((person) => (
-                    <li
-                      key={person.id}
-                      className="flex items-start gap-3 text-sm text-gray-900 sm:text-base"
-                    >
-                      <span
-                        className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white"
-                        style={{ backgroundColor: PERSON_MARKER.color }}
-                        aria-hidden="true"
+                <ul className="mt-6 space-y-4">
+                  {legendPeople.map((person) => {
+                    const nearest = findNearestMeetingPoint(
+                      person,
+                      meetingPoints
+                    );
+
+                    return (
+                      <li
+                        key={person.id}
+                        className="flex items-start gap-3 text-sm text-gray-900 sm:text-base"
                       >
-                        {person.label || "•"}
-                      </span>
-                      <span className="pt-0.5 leading-snug">
-                        <PersonLegendLine
-                          label={person.label}
-                          members={person.members}
-                        />
-                      </span>
-                    </li>
-                  ))}
+                        <span
+                          className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white"
+                          style={{
+                            backgroundColor: normalizePlanColor(
+                              person.color,
+                              DEFAULT_PERSON_COLOR
+                            ),
+                          }}
+                          aria-hidden="true"
+                        >
+                          {person.label || "•"}
+                        </span>
+                        <div className="min-w-0 pt-0.5 leading-snug">
+                          <PersonLegendLine
+                            label={person.label}
+                            members={person.members}
+                          />
+                          <p className="mt-1 text-xs text-gray-600 sm:text-sm">
+                            Coordinates:{" "}
+                            <span className="font-medium text-gray-800 tabular-nums">
+                              {formatCoordinates(person.lat, person.lng)}
+                            </span>
+                          </p>
+                          <p className="mt-0.5 text-xs text-gray-600 sm:text-sm">
+                            {nearest ? (
+                              <>
+                                Nearest meeting point:{" "}
+                                <span className="font-medium text-gray-800">
+                                  {nearest.point.name}
+                                </span>{" "}
+                                (
+                                <span className="tabular-nums">
+                                  {formatDistanceKm(nearest.distanceKm)}
+                                </span>
+                                )
+                              </>
+                            ) : (
+                              "No meeting points added"
+                            )}
+                          </p>
+                        </div>
+                      </li>
+                    );
+                  })}
                 </ul>
               )}
 
@@ -221,7 +265,7 @@ const GeneratedPlanSection = forwardRef<HTMLDivElement, GeneratedPlanSectionProp
                   <h4 className="text-sm font-semibold tracking-wide text-gray-500 uppercase">
                     Meeting points
                   </h4>
-                  <ul className="mt-3 space-y-2">
+                  <ul className="mt-3 space-y-3">
                     {meetingPoints.map((point) => (
                       <li
                         key={point.id}
@@ -231,6 +275,12 @@ const GeneratedPlanSection = forwardRef<HTMLDivElement, GeneratedPlanSectionProp
                         {point.notes ? (
                           <span className="text-gray-600"> — {point.notes}</span>
                         ) : null}
+                        <p className="mt-0.5 text-xs text-gray-600 sm:text-sm">
+                          Coordinates:{" "}
+                          <span className="font-medium text-gray-800 tabular-nums">
+                            {formatCoordinates(point.lat, point.lng)}
+                          </span>
+                        </p>
                       </li>
                     ))}
                   </ul>

@@ -1,12 +1,16 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import ColorSwatches from "@/app/components/ColorSwatches";
+import {
+  DEFAULT_ROUTE_COLOR,
+  normalizePlanColor,
+  suggestNextPlanColor,
+} from "@/app/lib/colors";
 import {
   listRouteEndpointOptions,
   parseEndpointKey,
   resolveEndpoint,
-  ROUTE_COLOR_OPTIONS,
-  suggestNextRouteColor,
 } from "@/app/lib/routing";
 import type {
   MeetingPoint,
@@ -44,7 +48,7 @@ export default function RoutesSection({
   );
 
   const suggestedColor = useMemo(
-    () => suggestNextRouteColor(routes.map((route) => route.color)),
+    () => suggestNextPlanColor(routes.map((route) => route.color)),
     [routes]
   );
 
@@ -52,12 +56,7 @@ export default function RoutesSection({
   const [toKey, setToKey] = useState("");
   const [color, setColor] = useState(suggestedColor);
 
-  // Keep the draft color in sync when routes change and the current pick
-  // was the previous suggestion (or is empty).
-  const draftColor = ROUTE_COLOR_OPTIONS.some((option) => option.value === color)
-    ? color
-    : suggestedColor;
-
+  const draftColor = normalizePlanColor(color, DEFAULT_ROUTE_COLOR);
   const canChoose = options.length >= 2;
 
   function handleAdd() {
@@ -76,7 +75,7 @@ export default function RoutesSection({
     setFromKey("");
     setToKey("");
     setColor(
-      suggestNextRouteColor([...routes.map((route) => route.color), draftColor])
+      suggestNextPlanColor([...routes.map((route) => route.color), draftColor])
     );
   }
 
@@ -128,6 +127,7 @@ export default function RoutesSection({
                 value={draftColor}
                 onChange={setColor}
                 name="new-route-color"
+                label="Route color"
               />
             </div>
             <button
@@ -200,6 +200,7 @@ export default function RoutesSection({
                       value={route.color}
                       onChange={(next) => onUpdateRouteColor(route.id, next)}
                       name={`route-color-${route.id}`}
+                      label="Route color"
                       compact
                     />
                   </div>
@@ -209,58 +210,6 @@ export default function RoutesSection({
           </ul>
         )}
       </div>
-    </div>
-  );
-}
-
-function ColorSwatches({
-  value,
-  onChange,
-  name,
-  compact = false,
-}: {
-  value: string;
-  onChange: (value: string) => void;
-  name: string;
-  compact?: boolean;
-}) {
-  return (
-    <div
-      className={`flex flex-wrap ${compact ? "gap-1.5" : "gap-2"}`}
-      role="radiogroup"
-      aria-label="Route color"
-    >
-      {ROUTE_COLOR_OPTIONS.map((option) => {
-        const selected = value === option.value;
-        return (
-          <label
-            key={option.value}
-            className={`relative cursor-pointer rounded-full ${
-              selected
-                ? "ring-2 ring-gray-900 ring-offset-1"
-                : "hover:ring-2 hover:ring-gray-300 hover:ring-offset-1"
-            }`}
-            title={option.label}
-          >
-            <input
-              type="radio"
-              name={name}
-              value={option.value}
-              checked={selected}
-              onChange={() => onChange(option.value)}
-              className="sr-only"
-            />
-            <span
-              className={`block rounded-full ${
-                compact ? "h-5 w-5" : "h-6 w-6"
-              }`}
-              style={{ backgroundColor: option.value }}
-              aria-hidden="true"
-            />
-            <span className="sr-only">{option.label}</span>
-          </label>
-        );
-      })}
     </div>
   );
 }

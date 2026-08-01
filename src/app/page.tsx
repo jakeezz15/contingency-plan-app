@@ -16,6 +16,7 @@ export default function Home() {
     updatedAt,
     address,
     label,
+    labelColor,
     keyPeople,
     namesText,
     people,
@@ -43,6 +44,7 @@ export default function Home() {
     setPlanName,
     setPlanNotes,
     setLabel,
+    setLabelColor,
     setKeyPeople,
     setNamesText,
     handlePersonAddressChange,
@@ -109,6 +111,7 @@ export default function Home() {
           generatePlanHint={generatePlanHint}
           canGeneratePlan={canGeneratePlan}
           label={label}
+          labelColor={labelColor}
           keyPeople={keyPeople}
           namesText={namesText}
           address={address}
@@ -117,6 +120,7 @@ export default function Home() {
           pendingGeocode={pendingGeocode}
           selectedLocation={selectedLocation}
           setLabel={setLabel}
+          setLabelColor={setLabelColor}
           setKeyPeople={setKeyPeople}
           setNamesText={setNamesText}
           handlePersonAddressChange={handlePersonAddressChange}
