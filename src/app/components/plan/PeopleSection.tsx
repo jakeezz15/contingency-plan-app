@@ -1,7 +1,12 @@
 "use client";
 
+import KeyPeopleFields from "@/app/components/KeyPeopleFields";
 import PersonCard from "@/app/components/PersonCard";
-import { parseNamesText, PERSON_MARKER } from "@/app/lib/roles";
+import {
+  buildHouseholdMembers,
+  PERSON_MARKER,
+  type KeyPersonDraft,
+} from "@/app/lib/roles";
 import type {
   GeocodeResult,
   MeetingPoint,
@@ -16,6 +21,7 @@ type PeopleSectionProps = {
   generatePlanHint: string;
   canGeneratePlan: boolean;
   label: string;
+  keyPeople: KeyPersonDraft[];
   namesText: string;
   address: string;
   searchMessage: string;
@@ -23,6 +29,7 @@ type PeopleSectionProps = {
   pendingGeocode: GeocodeResult | null;
   selectedLocation: SelectedLocation;
   onLabelChange: (value: string) => void;
+  onKeyPeopleChange: (value: KeyPersonDraft[]) => void;
   onNamesTextChange: (value: string) => void;
   onAddressChange: (value: string) => void;
   onConfirmAddress: () => void;
@@ -30,7 +37,6 @@ type PeopleSectionProps = {
   onClearAll: () => void;
   onEditPerson: (id: number) => void;
   onCancelEditPerson: () => void;
-  onSavePerson: (person: Person) => void;
   onRemovePerson: (id: number) => void;
 };
 
@@ -41,6 +47,7 @@ export default function PeopleSection({
   generatePlanHint,
   canGeneratePlan,
   label,
+  keyPeople,
   namesText,
   address,
   searchMessage,
@@ -48,6 +55,7 @@ export default function PeopleSection({
   pendingGeocode,
   selectedLocation,
   onLabelChange,
+  onKeyPeopleChange,
   onNamesTextChange,
   onAddressChange,
   onConfirmAddress,
@@ -55,19 +63,35 @@ export default function PeopleSection({
   onClearAll,
   onEditPerson,
   onCancelEditPerson,
-  onSavePerson,
   onRemovePerson,
 }: PeopleSectionProps) {
-  const filledNames = parseNamesText(namesText).length;
+  const isEditing = editingPersonId !== null;
+  const memberCount = buildHouseholdMembers(keyPeople, namesText).length;
   const canSubmit =
-    Boolean(selectedLocation) && Boolean(label.trim()) && filledNames > 0;
+    Boolean(selectedLocation) && Boolean(label.trim()) && memberCount > 0;
 
   return (
     <div id="people" className="flex min-h-0 flex-1 flex-col">
-      <div className="shrink-0 space-y-4 border-b border-gray-100 pb-4">
-        <p className="text-xs text-gray-500">
-          One label = one pin. List everyone at that address below.
-        </p>
+      <div
+        id="people-form"
+        className="shrink-0 space-y-4 border-b border-gray-100 pb-4"
+      >
+        <div className="flex items-start justify-between gap-3">
+          <p className="text-xs text-gray-500">
+            {isEditing
+              ? "Editing pin — same form as create. Save when done."
+              : "One label = one pin. Type an address, or use Drop pin on the map."}
+          </p>
+          {isEditing && (
+            <button
+              type="button"
+              onClick={onCancelEditPerson}
+              className="shrink-0 text-xs font-medium text-gray-600 hover:text-gray-900"
+            >
+              Cancel
+            </button>
+          )}
+        </div>
 
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
           <div className="sm:w-20">
@@ -145,21 +169,20 @@ export default function PeopleSection({
           </p>
         )}
 
+        <KeyPeopleFields keyPeople={keyPeople} onChange={onKeyPeopleChange} />
+
         <div>
           <label className="mb-1 block text-xs font-medium text-gray-600">
-            Names
+            Names of other people
           </label>
           <textarea
-            className="min-h-24 w-full resize-y rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900"
+            className="min-h-20 w-full resize-y rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900"
             placeholder={"John\nJohnny\nJane"}
             value={namesText}
             onChange={(e) => onNamesTextChange(e.target.value)}
           />
           <p className="mt-1 text-xs text-gray-500">
-            One name per line
-            {filledNames > 0
-              ? ` · ${filledNames} name${filledNames === 1 ? "" : "s"}`
-              : ""}
+            Regular people at this pin — one name per line
           </p>
         </div>
 
@@ -169,9 +192,11 @@ export default function PeopleSection({
           disabled={!canSubmit}
           className="w-full rounded-md bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-300"
         >
-          {filledNames > 1
-            ? `Add pin ${label.trim() || "—"} (${filledNames} people)`
-            : `Add pin ${label.trim() || "—"}`}
+          {isEditing
+            ? `Save pin ${label.trim() || "—"}`
+            : memberCount > 1
+              ? `Add pin ${label.trim() || "—"} (${memberCount} people)`
+              : `Add pin ${label.trim() || "—"}`}
         </button>
       </div>
 
@@ -211,8 +236,6 @@ export default function PeopleSection({
                   meetingPoints={meetingPoints}
                   isEditing={editingPersonId === person.id}
                   onEdit={() => onEditPerson(person.id)}
-                  onCancelEdit={onCancelEditPerson}
-                  onSave={onSavePerson}
                   onRemove={() => onRemovePerson(person.id)}
                 />
               ))}

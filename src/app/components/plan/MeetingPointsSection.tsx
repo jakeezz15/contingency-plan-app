@@ -42,7 +42,8 @@ export default function MeetingPointsSection({
     <div id="meeting-points" className="flex min-h-0 flex-1 flex-col">
       <div className="shrink-0 space-y-4 border-b border-gray-100 pb-4">
         <p className="text-xs text-gray-500">
-          Rally points people should go to in an emergency.
+          Rally points people should go to in an emergency. Type an address, or
+          use Drop pin on the map. Add custom paths under the Routes tab.
         </p>
 
         <div>

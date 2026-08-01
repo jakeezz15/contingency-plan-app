@@ -1,6 +1,8 @@
 export type HouseholdMember = {
   name: string;
   phone: string;
+  /** Role at this pin, e.g. Team Leader / Medical. Empty = regular person. */
+  status?: string;
 };
 
 export type Person = {
@@ -29,6 +31,20 @@ export type MeetingPoint = {
   lng: number;
 };
 
+/** A selectable route endpoint: people pin or meeting point. */
+export type RouteEndpointRef =
+  | { kind: "person"; id: number }
+  | { kind: "meeting"; id: number };
+
+/** User-defined route between two map endpoints. */
+export type PlannedRoute = {
+  id: string;
+  from: RouteEndpointRef;
+  to: RouteEndpointRef;
+  /** Hex color used on the map / PDF, e.g. "#dc2626". */
+  color: string;
+};
+
 export type SavedPlan = {
   id: string;
   planName: string;
@@ -37,6 +53,8 @@ export type SavedPlan = {
   updatedAt: string;
   people: Person[];
   meetingPoints: MeetingPoint[];
+  /** Custom routes the user chose to highlight on the map. */
+  routes: PlannedRoute[];
 };
 
 export type SelectedLocation = {

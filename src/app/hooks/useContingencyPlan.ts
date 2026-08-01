@@ -1,11 +1,17 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { geocodeAddress } from "@/app/lib/geocode";
+import { geocodeAddress, formatMapPinLabel, reverseGeocode } from "@/app/lib/geocode";
 import { exportElementToPdf } from "@/app/lib/pdf";
 import { prepareMapForPrint } from "@/app/lib/mapPrint";
 import { DEFAULT_BASEMAP, type BasemapId } from "@/app/lib/basemaps";
-import { parseNamesText, suggestNextPersonLabel } from "@/app/lib/roles";
+import {
+  buildHouseholdMembers,
+  emptyKeyPersonDraft,
+  splitHouseholdMembers,
+  suggestNextPersonLabel,
+  type KeyPersonDraft,
+} from "@/app/lib/roles";
 import {
   ACTIVE_PLAN_STORAGE_KEY,
   createEmptyPlan,
@@ -16,10 +22,13 @@ import {
   persistPlans,
   PLANS_STORAGE_KEY,
 } from "@/app/lib/plans";
+import { prunePlannedRoutes } from "@/app/lib/routing";
 import type {
   GeocodeResult,
   MeetingPoint,
   Person,
+  PlannedRoute,
+  RouteEndpointRef,
   SavedPlan,
   SelectedLocation,
 } from "@/app/types";
@@ -35,6 +44,9 @@ export function useContingencyPlan() {
 
   const [address, setAddress] = useState("");
   const [label, setLabel] = useState("1");
+  const [keyPeople, setKeyPeople] = useState<KeyPersonDraft[]>([
+    emptyKeyPersonDraft(),
+  ]);
   const [namesText, setNamesText] = useState("");
   const [people, setPeople] = useState<Person[]>([]);
   const [selectedLocation, setSelectedLocation] =
@@ -49,6 +61,7 @@ export function useContingencyPlan() {
   const [meetingPointAddress, setMeetingPointAddress] = useState("");
   const [meetingPointNotes, setMeetingPointNotes] = useState("");
   const [meetingPoints, setMeetingPoints] = useState<MeetingPoint[]>([]);
+  const [routes, setRoutes] = useState<PlannedRoute[]>([]);
   const [selectedMeetingLocation, setSelectedMeetingLocation] =
     useState<SelectedLocation>(null);
   const [pendingMeetingGeocode, setPendingMeetingGeocode] =
@@ -63,6 +76,8 @@ export function useContingencyPlan() {
   const [basemap, setBasemap] = useState<BasemapId>(DEFAULT_BASEMAP);
 
   const skipNextSave = useRef(true);
+  const skipNextPersonGeocode = useRef(false);
+  const skipNextMeetingGeocode = useRef(false);
   const importInputRef = useRef<HTMLInputElement>(null);
   const generatedPlanRef = useRef<HTMLDivElement>(null);
 
@@ -73,17 +88,53 @@ export function useContingencyPlan() {
     setUpdatedAt(plan.updatedAt);
     setPeople(plan.people);
     setMeetingPoints(plan.meetingPoints);
+    setRoutes(plan.routes ?? []);
     setLabel(suggestNextPersonLabel(plan.people.map((person) => person.label)));
+    setKeyPeople([emptyKeyPersonDraft()]);
     setNamesText("");
   }
 
   function resetPersonForm(currentPeople: Person[] = people) {
+    setEditingPersonId(null);
     setAddress("");
     setLabel(suggestNextPersonLabel(currentPeople.map((person) => person.label)));
+    setKeyPeople([emptyKeyPersonDraft()]);
     setNamesText("");
     setSelectedLocation(null);
     setPendingGeocode(null);
     setSearchMessage("");
+  }
+
+  function startEditPerson(id: number) {
+    const person = people.find((entry) => entry.id === id);
+    if (!person) return;
+
+    const split = splitHouseholdMembers(person.members);
+
+    setEditingPersonId(id);
+    setLabel(person.label);
+    setAddress(person.address);
+    setKeyPeople(split.keyPeople);
+    setNamesText(split.otherNamesText);
+    setSelectedLocation({ lat: person.lat, lng: person.lng });
+    setPendingGeocode({
+      displayName: person.address,
+      compactAddress: person.address,
+      lat: person.lat,
+      lng: person.lng,
+    });
+    setSearchMessage("");
+
+    requestAnimationFrame(() => {
+      document.getElementById("people-form")?.scrollIntoView({
+        behavior: "smooth",
+        block: "nearest",
+      });
+    });
+  }
+
+  function cancelEditPerson() {
+    resetPersonForm();
   }
 
   function resetMeetingPointForm() {
@@ -176,6 +227,7 @@ export function useContingencyPlan() {
               planNotes,
               people,
               meetingPoints,
+              routes,
               createdAt: plan.createdAt || now,
               updatedAt: now,
             }
@@ -187,7 +239,7 @@ export function useContingencyPlan() {
     });
 
     setUpdatedAt(now);
-  }, [planName, planNotes, people, meetingPoints, hasLoadedSavedData, activePlanId]);
+  }, [planName, planNotes, people, meetingPoints, routes, hasLoadedSavedData, activePlanId]);
 
   async function findAddressLocation(addressText: string) {
     try {
@@ -255,7 +307,73 @@ export function useContingencyPlan() {
     );
   }
 
+  async function pinLocationOnMap(
+    lat: number,
+    lng: number,
+    target: "person" | "meeting"
+  ) {
+    const fallbackLabel = formatMapPinLabel(lat, lng);
+
+    if (target === "person") {
+      skipNextPersonGeocode.current = true;
+      setIsSearching(true);
+      setSearchMessage("Looking up map pin…");
+      setSelectedLocation({ lat, lng });
+      setPendingGeocode({
+        displayName: fallbackLabel,
+        compactAddress: fallbackLabel,
+        lat,
+        lng,
+      });
+      setAddress(fallbackLabel);
+
+      try {
+        const result = await reverseGeocode(lat, lng);
+        skipNextPersonGeocode.current = true;
+        setPendingGeocode(result);
+        setAddress(result.compactAddress);
+        setSearchMessage("Map pin set. You can add this person now.");
+      } catch {
+        setSearchMessage("Map pin set (approximate location).");
+      } finally {
+        setIsSearching(false);
+      }
+      return;
+    }
+
+    skipNextMeetingGeocode.current = true;
+    setIsSearchingMeeting(true);
+    setMeetingSearchMessage("Looking up map pin…");
+    setSelectedMeetingLocation({ lat, lng });
+    setPendingMeetingGeocode({
+      displayName: fallbackLabel,
+      compactAddress: fallbackLabel,
+      lat,
+      lng,
+    });
+    setMeetingPointAddress(fallbackLabel);
+
+    try {
+      const result = await reverseGeocode(lat, lng);
+      skipNextMeetingGeocode.current = true;
+      setPendingMeetingGeocode(result);
+      setMeetingPointAddress(result.compactAddress);
+      setMeetingSearchMessage(
+        "Map pin set. You can add this meeting point now."
+      );
+    } catch {
+      setMeetingSearchMessage("Map pin set (approximate location).");
+    } finally {
+      setIsSearchingMeeting(false);
+    }
+  }
+
   useEffect(() => {
+    if (skipNextPersonGeocode.current) {
+      skipNextPersonGeocode.current = false;
+      return;
+    }
+
     if (address.trim().length < 5) return;
 
     const delaySearch = setTimeout(() => {
@@ -266,6 +384,11 @@ export function useContingencyPlan() {
   }, [address]);
 
   useEffect(() => {
+    if (skipNextMeetingGeocode.current) {
+      skipNextMeetingGeocode.current = false;
+      return;
+    }
+
     if (meetingPointAddress.trim().length < 5) return;
 
     const delaySearch = setTimeout(() => {
@@ -291,10 +414,45 @@ export function useContingencyPlan() {
       return;
     }
 
-    const names = parseNamesText(namesText);
+    const editingPerson =
+      editingPersonId === null
+        ? null
+        : people.find((person) => person.id === editingPersonId) ?? null;
 
-    if (names.length === 0) {
-      alert("Please enter at least one name (one per line).");
+    const previousPhones = editingPerson
+      ? new Map(
+          editingPerson.members.map((member) => [
+            member.name.trim().toLowerCase(),
+            member.phone,
+          ])
+        )
+      : undefined;
+
+    const members = buildHouseholdMembers(keyPeople, namesText, previousPhones);
+
+    if (members.length === 0) {
+      alert(
+        "Add at least one person with a status, or list other people by name."
+      );
+      return;
+    }
+
+    if (editingPerson) {
+      const nextPeople = people.map((person) =>
+        person.id === editingPerson.id
+          ? {
+              ...person,
+              label: label.trim(),
+              address: pendingGeocode?.compactAddress ?? address.trim(),
+              lat: selectedLocation.lat,
+              lng: selectedLocation.lng,
+              members,
+            }
+          : person
+      );
+      setPeople(nextPeople);
+      resetPersonForm(nextPeople);
+      invalidateGeneratedPlan();
       return;
     }
 
@@ -304,7 +462,7 @@ export function useContingencyPlan() {
       address: pendingGeocode?.compactAddress ?? address.trim(),
       lat: selectedLocation.lat,
       lng: selectedLocation.lng,
-      members: names.map((name) => ({ name, phone: "" })),
+      members,
     };
 
     const nextPeople = [...people, newPerson];
@@ -314,19 +472,24 @@ export function useContingencyPlan() {
   }
 
   function updatePerson(updatedPerson: Person) {
-    setPeople(
-      people.map((person) =>
-        person.id === updatedPerson.id ? updatedPerson : person
-      )
+    const nextPeople = people.map((person) =>
+      person.id === updatedPerson.id ? updatedPerson : person
     );
-    setEditingPersonId(null);
+    setPeople(nextPeople);
+    if (editingPersonId === updatedPerson.id) {
+      resetPersonForm(nextPeople);
+    }
     invalidateGeneratedPlan();
   }
 
   function removePerson(id: number) {
-    setPeople(people.filter((person) => person.id !== id));
+    const nextPeople = people.filter((person) => person.id !== id);
+    setPeople(nextPeople);
+    setRoutes((current) =>
+      prunePlannedRoutes(current, nextPeople, meetingPoints)
+    );
     if (editingPersonId === id) {
-      setEditingPersonId(null);
+      resetPersonForm(nextPeople);
     }
     invalidateGeneratedPlan();
   }
@@ -359,7 +522,61 @@ export function useContingencyPlan() {
   }
 
   function removeMeetingPoint(id: number) {
-    setMeetingPoints(meetingPoints.filter((point) => point.id !== id));
+    const nextMeetingPoints = meetingPoints.filter((point) => point.id !== id);
+    setMeetingPoints(nextMeetingPoints);
+    setRoutes((current) =>
+      prunePlannedRoutes(current, people, nextMeetingPoints)
+    );
+    invalidateGeneratedPlan();
+  }
+
+  function addRoute(
+    from: RouteEndpointRef,
+    to: RouteEndpointRef,
+    color: string
+  ) {
+    const duplicate = routes.some(
+      (route) =>
+        route.from.kind === from.kind &&
+        route.from.id === from.id &&
+        route.to.kind === to.kind &&
+        route.to.id === to.id
+    );
+    if (duplicate) {
+      alert("That route is already on the plan.");
+      return;
+    }
+
+    setRoutes([
+      ...routes,
+      {
+        id: `route-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        from,
+        to,
+        color,
+      },
+    ]);
+    invalidateGeneratedPlan();
+  }
+
+  function updateRouteColor(id: string, color: string) {
+    setRoutes(
+      routes.map((route) => (route.id === id ? { ...route, color } : route))
+    );
+    invalidateGeneratedPlan();
+  }
+
+  function removeRoute(id: string) {
+    setRoutes(routes.filter((route) => route.id !== id));
+    invalidateGeneratedPlan();
+  }
+
+  function clearAllRoutes() {
+    const confirmClear = confirm(
+      "Are you sure you want to remove all saved routes?"
+    );
+    if (!confirmClear) return;
+    setRoutes([]);
     invalidateGeneratedPlan();
   }
 
@@ -371,6 +588,7 @@ export function useContingencyPlan() {
     if (!confirmClear) return;
 
     setPeople([]);
+    setRoutes((current) => prunePlannedRoutes(current, [], meetingPoints));
     resetPersonForm([]);
     invalidateGeneratedPlan();
   }
@@ -383,6 +601,7 @@ export function useContingencyPlan() {
     if (!confirmClear) return;
 
     setMeetingPoints([]);
+    setRoutes((current) => prunePlannedRoutes(current, people, []));
     invalidateGeneratedPlan();
   }
 
@@ -402,6 +621,7 @@ export function useContingencyPlan() {
       updatedAt: now,
       people: [],
       meetingPoints: [],
+      routes: [],
     };
 
     const updatedPlans = plans.map((plan) =>
@@ -510,36 +730,28 @@ export function useContingencyPlan() {
     }
   }
 
-  async function exportPdf(orientation: "portrait" | "landscape" = "portrait") {
+  async function exportPdf(orientation: "portrait" | "landscape" = "landscape") {
     if (!generatedPlanRef.current) return;
 
     try {
       setIsExportingPdf(true);
-      document.documentElement.classList.add("preparing-print");
-      if (orientation === "landscape") {
-        document.documentElement.classList.add("preparing-print-landscape");
-      }
-      await new Promise<void>((resolve) => {
-        requestAnimationFrame(() => {
-          requestAnimationFrame(() => resolve());
-        });
-      });
-      await prepareMapForPrint();
 
       const safeName = planName.trim() || "contingency-plan";
       await exportElementToPdf(
         generatedPlanRef.current,
         `${safeName.toLowerCase().replace(/\s+/g, "-")}.pdf`,
-        orientation
+        orientation,
+        {
+          people,
+          meetingPoints,
+          routes,
+          basemap,
+        }
       );
     } catch (error) {
       console.error(error);
       alert("Could not export PDF. Please try again.");
     } finally {
-      document.documentElement.classList.remove(
-        "preparing-print",
-        "preparing-print-landscape"
-      );
       setIsExportingPdf(false);
     }
   }
@@ -553,6 +765,7 @@ export function useContingencyPlan() {
       updatedAt: updatedAt || new Date().toISOString(),
       people,
       meetingPoints,
+      routes,
     };
 
     const blob = new Blob([JSON.stringify(plan, null, 2)], {
@@ -598,6 +811,7 @@ export function useContingencyPlan() {
   }
 
   function handlePersonAddressChange(value: string) {
+    skipNextPersonGeocode.current = false;
     setAddress(value);
     setSelectedLocation(null);
     setPendingGeocode(null);
@@ -605,6 +819,7 @@ export function useContingencyPlan() {
   }
 
   function handleMeetingPointAddressChange(value: string) {
+    skipNextMeetingGeocode.current = false;
     setMeetingPointAddress(value);
     setSelectedMeetingLocation(null);
     setPendingMeetingGeocode(null);
@@ -631,6 +846,7 @@ export function useContingencyPlan() {
     updatedAt,
     address,
     label,
+    keyPeople,
     namesText,
     people,
     selectedLocation,
@@ -641,6 +857,7 @@ export function useContingencyPlan() {
     meetingPointAddress,
     meetingPointNotes,
     meetingPoints,
+    routes,
     selectedMeetingLocation,
     pendingMeetingGeocode,
     isSearchingMeeting,
@@ -664,11 +881,11 @@ export function useContingencyPlan() {
     },
     handlePersonAddressChange,
     setLabel,
+    setKeyPeople,
     setNamesText,
     setMeetingPointName,
     handleMeetingPointAddressChange,
     setMeetingPointNotes,
-    setEditingPersonId,
     setBasemap,
     switchToPlan,
     createNewPlan,
@@ -681,13 +898,20 @@ export function useContingencyPlan() {
     importPlan,
     confirmAddress,
     confirmMeetingAddress,
+    pinLocationOnMap,
     addHousehold,
+    startEditPerson,
+    cancelEditPerson,
     updatePerson,
     removePerson,
     clearAllPeople,
     addMeetingPoint,
     removeMeetingPoint,
     clearAllMeetingPoints,
+    addRoute,
+    updateRouteColor,
+    removeRoute,
+    clearAllRoutes,
     resetActivePlan,
   };
 }

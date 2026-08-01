@@ -97,6 +97,9 @@
     margin: 0 auto;
     padding: 0.5in !important;
     border: none !important;
+    display: block;
+    align-content: start;
+    text-align: left;
   }
 
   .leaflet-control-container {
