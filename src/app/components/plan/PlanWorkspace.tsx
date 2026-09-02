@@ -168,7 +168,7 @@ export default function PlanWorkspace({
             importInputRef={importInputRef}
           />
 
-          <div className="flex shrink-0 border-b border-gray-200 px-2">
+          <div className="flex shrink-0 gap-1 border-b border-gray-200 bg-gray-100 px-2 py-2">
             <TabButton
               active={tab === "people"}
               onClick={() => setTab("people")}
@@ -286,23 +286,22 @@ function TabButton({
     <button
       type="button"
       onClick={onClick}
-      className={`relative flex-1 px-3 py-2.5 text-sm font-medium transition-colors ${
-        active ? "text-gray-900" : "text-gray-500 hover:text-gray-800"
+      className={`flex-1 rounded-md px-3 py-2 text-sm font-semibold transition-colors ${
+        active
+          ? "bg-white text-gray-900 shadow-sm ring-1 ring-gray-300"
+          : "text-gray-600 hover:bg-gray-200/70 hover:text-gray-900"
       }`}
     >
-      <span className="inline-flex items-center gap-1.5">
+      <span className="inline-flex items-center justify-center gap-1.5">
         {label}
         <span
-          className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${
-            active ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-600"
+          className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ${
+            active ? "bg-gray-900 text-white" : "bg-gray-200 text-gray-700"
           }`}
         >
           {count}
         </span>
       </span>
-      {active && (
-        <span className="absolute inset-x-2 bottom-0 h-0.5 rounded-full bg-gray-900" />
-      )}
     </button>
   );
 }
