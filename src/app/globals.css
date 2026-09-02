@@ -31,3 +31,8 @@ body {
   background: transparent !important;
   border: none !important;
 }
+
+/* Clear the overlaid basemap switcher in the top-left */
+.map-with-basemap-overlay .leaflet-top.leaflet-left {
+  top: 4rem;
+}

@@ -93,8 +93,9 @@
   .generated-plan-legend-page {
     break-before: page;
     page-break-before: always;
-    max-width: 9.5in;
-    margin: 0 auto;
+    max-width: none;
+    width: 100%;
+    margin: 0;
     padding: 0.5in !important;
     border: none !important;
     display: block;
@@ -172,6 +173,10 @@ html.preparing-print .marker-label-text {
 }
 
 html.preparing-print .generated-plan-legend-page {
-  padding: 0.75in !important;
+  width: 100% !important;
+  max-width: none !important;
+  margin: 0 !important;
+  padding: 0.5in !important;
   border: none !important;
+  text-align: left !important;
 }

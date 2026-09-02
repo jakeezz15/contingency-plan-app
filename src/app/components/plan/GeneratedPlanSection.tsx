@@ -5,6 +5,7 @@ import { forwardRef, useEffect, useId, useState } from "react";
 import ClientOnly from "@/app/components/ClientOnly";
 import MapPlaceholder from "@/app/components/MapPlaceholder";
 import { PersonLegendLine } from "@/app/components/MemberNameLabel";
+import { formatCompactAddress } from "@/app/lib/address";
 import {
   findNearestMeetingPoint,
   formatDistanceKm,
@@ -170,7 +171,7 @@ const GeneratedPlanSection = forwardRef<HTMLDivElement, GeneratedPlanSectionProp
                 }
               >
                 <MapPicker
-                  mapKey="generated-plan-map"
+                  mapKey={`generated-plan-map-${titleId}`}
                   people={people}
                   meetingPoints={meetingPoints}
                   plannedRoutes={routes}
@@ -187,31 +188,32 @@ const GeneratedPlanSection = forwardRef<HTMLDivElement, GeneratedPlanSectionProp
 
             <div
               data-pdf-page
-              data-pdf-align="top"
-              className="generated-plan-legend-page border-t border-gray-200 bg-white px-5 py-6 sm:px-8 sm:py-8 print:border-0"
+              data-pdf-align="top-left"
+              className="generated-plan-legend-page w-full border-t border-gray-200 bg-white px-5 py-6 sm:px-8 sm:py-8 print:border-0"
             >
               <h3 className="text-lg font-semibold text-gray-900">
                 Pin legend
               </h3>
               <p className="mt-1 text-sm text-gray-500">
-                Who each map number belongs to, with coordinates and distance to
-                the nearest meeting point
+                Who each map number belongs to, with address, coordinates, and
+                distance to the nearest meeting point
               </p>
 
               {legendPeople.length === 0 ? (
                 <p className="mt-6 text-sm text-gray-500">No pins yet.</p>
               ) : (
-                <ul className="mt-6 space-y-4">
+                <ul className="legend-people-grid mt-6 grid grid-cols-[repeat(auto-fill,minmax(16rem,1fr))] gap-x-6 gap-y-4">
                   {legendPeople.map((person) => {
                     const nearest = findNearestMeetingPoint(
                       person,
                       meetingPoints
                     );
+                    const address = formatCompactAddress(person.address);
 
                     return (
                       <li
                         key={person.id}
-                        className="flex items-start gap-3 text-sm text-gray-900 sm:text-base"
+                        className="flex min-w-0 items-start gap-3 text-sm text-gray-900 sm:text-base"
                       >
                         <span
                           className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white"
@@ -226,11 +228,16 @@ const GeneratedPlanSection = forwardRef<HTMLDivElement, GeneratedPlanSectionProp
                           {person.label || "•"}
                         </span>
                         <div className="min-w-0 pt-0.5 leading-snug">
-                          <PersonLegendLine
-                            label={person.label}
-                            members={person.members}
-                          />
-                          <p className="mt-1 text-xs text-gray-600 sm:text-sm">
+                          <PersonLegendLine members={person.members} />
+                          {address ? (
+                            <p className="mt-1 text-xs text-gray-600 sm:text-sm">
+                              Address:{" "}
+                              <span className="font-medium text-gray-800">
+                                {address}
+                              </span>
+                            </p>
+                          ) : null}
+                          <p className="mt-0.5 text-xs text-gray-600 sm:text-sm">
                             Coordinates:{" "}
                             <span className="font-medium text-gray-800 tabular-nums">
                               {formatCoordinates(person.lat, person.lng)}
@@ -265,24 +272,39 @@ const GeneratedPlanSection = forwardRef<HTMLDivElement, GeneratedPlanSectionProp
                   <h4 className="text-sm font-semibold tracking-wide text-gray-500 uppercase">
                     Meeting points
                   </h4>
-                  <ul className="mt-3 space-y-3">
-                    {meetingPoints.map((point) => (
-                      <li
-                        key={point.id}
-                        className="text-sm text-gray-900 sm:text-base"
-                      >
-                        <span className="font-medium">{point.name}</span>
-                        {point.notes ? (
-                          <span className="text-gray-600"> — {point.notes}</span>
-                        ) : null}
-                        <p className="mt-0.5 text-xs text-gray-600 sm:text-sm">
-                          Coordinates:{" "}
-                          <span className="font-medium text-gray-800 tabular-nums">
-                            {formatCoordinates(point.lat, point.lng)}
-                          </span>
-                        </p>
-                      </li>
-                    ))}
+                  <ul className="legend-meeting-grid mt-3 grid grid-cols-[repeat(auto-fill,minmax(16rem,1fr))] gap-x-6 gap-y-3">
+                    {meetingPoints.map((point) => {
+                      const address = formatCompactAddress(point.address);
+
+                      return (
+                        <li
+                          key={point.id}
+                          className="min-w-0 text-sm text-gray-900 sm:text-base"
+                        >
+                          <span className="font-medium">{point.name}</span>
+                          {point.notes ? (
+                            <span className="text-gray-600">
+                              {" "}
+                              — {point.notes}
+                            </span>
+                          ) : null}
+                          {address ? (
+                            <p className="mt-0.5 text-xs text-gray-600 sm:text-sm">
+                              Address:{" "}
+                              <span className="font-medium text-gray-800">
+                                {address}
+                              </span>
+                            </p>
+                          ) : null}
+                          <p className="mt-0.5 text-xs text-gray-600 sm:text-sm">
+                            Coordinates:{" "}
+                            <span className="font-medium text-gray-800 tabular-nums">
+                              {formatCoordinates(point.lat, point.lng)}
+                            </span>
+                          </p>
+                        </li>
+                      );
+                    })}
                   </ul>
                 </div>
               )}

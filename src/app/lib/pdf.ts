@@ -26,10 +26,12 @@ function getHdCaptureScale() {
   return Math.min(4, Math.max(3, Math.ceil(window.devicePixelRatio || 2) + 1));
 }
 
+type PdfPageAlign = "top-left" | "center";
+
 function drawCanvasOnPdfPage(
   pdf: InstanceType<typeof import("jspdf").default>,
   canvas: HTMLCanvasElement,
-  verticalAlign: "top" | "center" = "center"
+  align: PdfPageAlign = "center"
 ) {
   const pageWidthMm = pdf.internal.pageSize.getWidth();
   const pageHeightMm = pdf.internal.pageSize.getHeight();
@@ -43,7 +45,8 @@ function drawCanvasOnPdfPage(
   let drawWidthMm: number;
   let drawHeightMm: number;
 
-  if (verticalAlign === "top") {
+  if (align === "top-left") {
+    // Prefer full page width so legend grids stay left-anchored.
     drawWidthMm = contentWidthMm;
     drawHeightMm = contentWidthMm / imageRatio;
     if (drawHeightMm > contentHeightMm) {
@@ -58,9 +61,12 @@ function drawCanvasOnPdfPage(
     drawWidthMm = contentHeightMm * imageRatio;
   }
 
-  const offsetXMm = marginMm + (contentWidthMm - drawWidthMm) / 2;
+  const offsetXMm =
+    align === "top-left"
+      ? marginMm
+      : marginMm + (contentWidthMm - drawWidthMm) / 2;
   const offsetYMm =
-    verticalAlign === "top"
+    align === "top-left"
       ? marginMm
       : marginMm + (contentHeightMm - drawHeightMm) / 2;
   const imageData = canvas.toDataURL("image/jpeg", 0.95);
@@ -129,9 +135,12 @@ export async function exportElementToPdf(
       pdf.addPage([TABLOID_WIDTH_MM, TABLOID_HEIGHT_MM], orientation);
     }
 
-    const verticalAlign =
-      target.dataset.pdfAlign === "top" ? "top" : "center";
-    drawCanvasOnPdfPage(pdf, canvas, verticalAlign);
+    const align: PdfPageAlign =
+      target.dataset.pdfAlign === "top" ||
+      target.dataset.pdfAlign === "top-left"
+        ? "top-left"
+        : "center";
+    drawCanvasOnPdfPage(pdf, canvas, align);
   }
 
   pdf.save(fileName);

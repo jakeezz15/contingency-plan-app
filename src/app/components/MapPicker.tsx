@@ -745,7 +745,9 @@ export default function MapPicker({
     <div
       className={`relative isolate z-0 min-h-0 flex-1 overflow-hidden print:break-inside-avoid ${
         flush ? "rounded-none border-0" : "rounded-xl border border-gray-300"
-      } ${heightClass} ${enablePrintPrepare ? "map-print-target" : ""}`}
+      } ${heightClass} ${enablePrintPrepare ? "map-print-target" : ""} ${
+        showBasemapSwitcher && flush ? "map-with-basemap-overlay" : ""
+      }`}
       onMouseLeave={() => setIsMapInteractive(false)}
     >
       {showBasemapSwitcher && flush && (
